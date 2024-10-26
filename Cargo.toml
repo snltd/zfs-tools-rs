@@ -3,6 +3,7 @@ members = [
   "common",
   "zfs-real-usage",
   "zfs-remove-snaps",
+  "zfs-rogue-snaps",
 ]
 
 resolver = "2"

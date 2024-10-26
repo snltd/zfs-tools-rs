@@ -809,3 +809,11 @@ dependencies = [
  "common",
  "regex",
 ]
+
+[[package]]
+name = "zfs-rogue-snaps"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "regex",
+]
