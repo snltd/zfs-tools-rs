@@ -1,0 +1,8 @@
+[workspace]
+members = [ 
+  "common",
+  "zfs-real-usage",
+  "zfs-remove-snaps",
+]
+
+resolver = "2"

@@ -1,0 +1,8 @@
+[package]
+name = "zfs-real-usage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+byte-unit = "5.1"
+common = { path = "../common" }
