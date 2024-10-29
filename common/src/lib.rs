@@ -1,9 +1,27 @@
-//! Functions, constants, and whatever else comes along, which are required by
+//! Functions, constants, types, and whatever else comes along, which are required by
 //! more than one of the tools in this crate.
 //!
+pub mod types {
+    use std::error::Error;
+    use std::path::PathBuf;
+
+    pub type ArgList = Vec<String>;
+    pub type SnapshotList = Vec<String>;
+    pub type SnapshotResult = Result<SnapshotList, Box<dyn Error>>;
+    pub type MountList = Vec<(PathBuf, String)>;
+
+    pub struct Opts {
+        pub verbose: bool,
+        pub noop: bool,
+    }
+}
+
 pub mod utils {
     use crate::types::MountList;
     use std::error::Error;
+    use std::fs;
+    use std::io;
+    use std::os::unix::fs::MetadataExt;
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -104,6 +122,43 @@ pub mod utils {
                 .join(" ")
         )
     }
+
+    pub fn snapshot_dir(file: &Path) -> Option<PathBuf> {
+        match dataset_root(file) {
+            Ok(dir) => {
+                let snapdir = dir.join(".zfs").join("snapshot");
+                if snapdir.exists() {
+                    Some(snapdir)
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
+    }
+
+    pub fn is_mountpoint(file: &Path) -> io::Result<bool> {
+        if file == PathBuf::from("/") {
+            Ok(true)
+        } else {
+            let path_metadata = fs::metadata(file)?;
+            let parent_metadata = fs::metadata(file.parent().unwrap_or(file))?;
+            Ok(path_metadata.dev() != parent_metadata.dev())
+        }
+    }
+
+    pub fn dataset_root(file: &Path) -> Result<PathBuf, std::io::Error> {
+        if is_mountpoint(file)? {
+            Ok(file.to_path_buf())
+        } else if let Some(parent) = file.parent() {
+            dataset_root(parent)
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "failed to find root",
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -113,6 +168,23 @@ mod test {
     use std::path::PathBuf;
     use std::process::Command;
 
+    // You'll have to trust that these tests pass on my illumos box. They're skipped in Github
+    // Actions.
+    #[cfg(target_os = "illumos")]
+    #[test]
+    fn test_snapshot_dir() {
+        assert_eq!(
+            PathBuf::from("/.zfs/snapshot"),
+            snapshot_dir(&PathBuf::from("/etc/passwd")).unwrap()
+        );
+
+        assert_eq!(None, snapshot_dir(&PathBuf::from("/tmp")));
+
+        assert_eq!(
+            PathBuf::from("/build/.zfs/snapshot"),
+            snapshot_dir(&PathBuf::from("/build/omnios-extra/build/")).unwrap()
+        );
+    }
     #[test]
     fn test_output_as_lines() {
         assert_eq!(
@@ -188,20 +260,5 @@ mod test {
             Some("fast/zone/build/config".to_string()),
             dataset_from_file(&PathBuf::from("/build/configs/file"), &mounts)
         );
-    }
-}
-
-pub mod types {
-    use std::error::Error;
-    use std::path::PathBuf;
-
-    pub type ArgList = Vec<String>;
-    pub type SnapshotList = Vec<String>;
-    pub type SnapshotResult = Result<SnapshotList, Box<dyn Error>>;
-    pub type MountList = Vec<(PathBuf, String)>;
-
-    pub struct Opts {
-        pub verbose: bool,
-        pub noop: bool,
     }
 }
