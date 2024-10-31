@@ -1,4 +1,4 @@
-# ZFS Tools
+# ZFS Tools [![Test](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml/badge.svg)](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml)
 
 Rust rewrites of some shell and Ruby scripts I've been using for years. Some of
 what they do is now replicated in illumos.
