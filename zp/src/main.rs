@@ -1,3 +1,212 @@
+use clap::ArgAction;
+use clap::Parser;
+use std::ffi::OsStr;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+struct Opts {
+    verbose: bool,
+    noop: bool,
+    noclobber: bool,
+}
+
+#[derive(Parser)]
+#[clap(version, about = "Promotes files from ZFS snapshots")]
+
+struct Cli {
+    /// Print what would happen, without doing it
+    #[clap(short, long)]
+    noop: bool,
+    /// Be verbose
+    #[clap(short, long)]
+    verbose: bool,
+    /// by default, existing live files are overwritten. With this option, they are not
+    #[clap(short = 'N', long, action=ArgAction::SetTrue)]
+    noclobber: bool,
+    /// File(s) to promote
+    #[clap()]
+    file_list: Vec<String>,
+}
+
+fn copy_file_action(src: &Path, dest: &Path, opts: &Opts) -> Result<u64, std::io::Error> {
+    if dest.exists() && opts.noclobber {
+        if opts.verbose {
+            println!("{} exists and noclobber is set", dest.display());
+        }
+        Ok(0)
+    } else {
+        if opts.verbose || opts.noop {
+            println!("{} -> {}", src.display(), dest.display());
+        }
+
+        if opts.noop || (src.is_dir() && dest.exists()) {
+            Ok(0)
+        } else {
+            fs::copy(src, dest)
+        }
+    }
+}
+
+fn copy_file(src: &Path, dest: &Path, opts: &Opts) -> Result<u64, std::io::Error> {
+    if src.is_file() {
+        copy_file_action(src, dest, opts)
+    } else {
+        if !dest.exists() {
+            fs::create_dir_all(dest)?;
+        }
+
+        for f in fs::read_dir(src)? {
+            let f = f?;
+            let src_path = f.path();
+            let dest_path = dest.join(f.file_name());
+
+            if src.is_file() {
+                copy_file_action(&src_path, &dest_path, opts)?;
+            } else {
+                copy_file(&src_path, &dest_path, opts)?;
+            }
+        }
+
+        Ok(0)
+    }
+}
+
+fn in_snapshot(file: &Path) -> bool {
+    let components: Vec<_> = file.components().map(|s| s.as_os_str()).collect();
+
+    if let Some(zfs_index) = components.iter().position(|&c| c == OsStr::new(".zfs")) {
+        if let Some(snapshot_idx) = components.get(zfs_index + 1) {
+            return snapshot_idx == &OsStr::new("snapshot");
+        }
+    }
+
+    false
+}
+
+fn target_file(file: &Path) -> Option<PathBuf> {
+    let components: Vec<_> = file.components().map(|s| s.as_os_str()).collect();
+
+    if let Some(zfs_index) = components.iter().position(|&c| c == OsStr::new(".zfs")) {
+        let ret = components
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                if i < zfs_index || i > (zfs_index + 2) {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Some(ret)
+    } else {
+        None
+    }
+}
+
 fn main() {
-    println!("Hello, world!");
+    let cli = Cli::parse();
+
+    let opts = Opts {
+        verbose: cli.verbose,
+        noop: cli.noop,
+        noclobber: cli.noclobber,
+    };
+
+    let mut errs = 0;
+
+    for file in cli.file_list {
+        let file = PathBuf::from(file);
+
+        let file_path = match file.canonicalize() {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("Failed to canonicalize {}", e);
+                continue;
+            }
+        };
+
+        if !in_snapshot(&file_path) {
+            eprintln!("{} is not inside a ZFS snapshot", &file_path.display());
+            errs += 1;
+            continue;
+        }
+
+        let target_file = match target_file(&file_path) {
+            Some(path) => path,
+            None => {
+                eprintln!("Could not find target for {}", &file_path.display());
+                errs += 1;
+                continue;
+            }
+        };
+
+        let target_dir = match target_file.parent() {
+            Some(dir) => dir,
+            None => {
+                eprintln!(
+                    "Could not find target directory for {}",
+                    &target_file.display()
+                );
+                errs += 1;
+                continue;
+            }
+        };
+
+        if !target_dir.exists() {
+            if opts.verbose {
+                println!("Creating {}", target_dir.display());
+            }
+
+            if !opts.noop {
+                if let Err(e) = fs::create_dir_all(target_dir) {
+                    eprintln!("Failed to create directory {}: {}", target_dir.display(), e);
+                    errs += 1;
+                    continue;
+                }
+            }
+        }
+
+        if let Err(e) = copy_file(&file, &target_file, &opts) {
+            eprintln!(
+                "Failed to copy {} to {}: {}",
+                &file.display(),
+                &target_file.display(),
+                e,
+            );
+            errs += 1;
+        }
+    }
+
+    if errs > 0 {
+        eprintln!("Encountered {} error(s)", errs);
+        std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_target_file() {
+        assert_eq!(
+            Some(PathBuf::from("/test/dir/file")),
+            target_file(&PathBuf::from("/test/.zfs/snapshot/monday/dir/file"))
+        );
+
+        assert_eq!(
+            Some(PathBuf::from("/test/u01/u02/mtpt/deep/dir/file")),
+            target_file(&PathBuf::from(
+                "/test/u01/u02/mtpt/.zfs/snapshot/test/deep/dir/file"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_in_snapshot() {
+        assert!(in_snapshot(&PathBuf::from("/test/.zfs/snapshot/monday/d")));
+        assert!(!in_snapshot(&PathBuf::from("/build/dir")));
+        assert!(!in_snapshot(&PathBuf::from("/test/snapshot/dir")));
+    }
 }

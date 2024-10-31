@@ -6,6 +6,7 @@ members = [
   "zfs-rogue-snaps",
   "zfs-snap",
   "zfs-touch-from-snap",
+  "zp",
 ]
 
 resolver = "2"

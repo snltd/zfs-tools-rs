@@ -233,6 +233,15 @@ name = "common"
 version = "0.1.0"
 
 [[package]]
+name = "cp_r"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "837ca07dfd27a2663ac7c4701bb35856b534c2a61dd47af06ccf65d3bec79ebc"
+dependencies = [
+ "filetime",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -943,4 +952,13 @@ dependencies = [
  "filetime",
  "glob",
  "time",
+]
+
+[[package]]
+name = "zp"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "common",
+ "cp_r",
 ]
