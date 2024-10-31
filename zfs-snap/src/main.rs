@@ -1,13 +1,8 @@
 use clap::Parser;
-use common::types::Opts;
+use common::types::{Filesystems, Opts};
 use common::utils;
-use std::collections::HashSet;
-use std::path::PathBuf;
 use std::process::{exit, Command};
 use time::{format_description, OffsetDateTime};
-
-type Filesystems = Vec<String>;
-type ZfsMounts = Vec<(PathBuf, String)>;
 
 #[derive(Parser)]
 #[clap(version, about = "Takes automatically named ZFS snapshots", long_about= None)]
@@ -33,7 +28,7 @@ struct Cli {
     /// Recurse down dataset hierarchies                                                              
     #[clap(short, long)]
     recurse: bool,
-    /// Comma-separated list of filesystems to NOT snapshot. Accepts Rust regexes.
+    /// Comma-separated list of filesystems to NOT snapshot. Accepts * as a wildcard.
     #[clap(short, long)]
     omit: Option<String>,
     /// Dataset or directory name. If not args are given, every dataset will be snapshotted.
@@ -46,38 +41,6 @@ fn dataset_list(from_user: Option<Vec<String>>, all_filesystems: Filesystems) ->
         Some(list) => list,
         None => all_filesystems,
     }
-}
-
-fn dataset_list_recursive(from_user: Vec<String>, all_filesystems: Filesystems) -> Filesystems {
-    let unique_datasets: HashSet<String> = from_user
-        .into_iter()
-        .flat_map(|path| {
-            let formatted_path = ensure_trailing_slash(&path);
-            all_filesystems
-                .iter()
-                .filter(move |fs| *fs == &path || fs.starts_with(&formatted_path))
-                .map(|fs| fs.to_owned())
-        })
-        .collect();
-
-    unique_datasets.into_iter().collect()
-}
-
-fn ensure_trailing_slash(path: &str) -> String {
-    if path.ends_with('/') {
-        path.to_string()
-    } else {
-        format!("{}/", path)
-    }
-}
-
-fn files_to_datasets(file_list: Vec<String>, zfs_mounts: ZfsMounts) -> Filesystems {
-    let filesystems: HashSet<String> = file_list
-        .iter()
-        .filter_map(|f| utils::dataset_from_file(&PathBuf::from(f), &zfs_mounts))
-        .collect();
-
-    filesystems.into_iter().collect()
 }
 
 fn snapname(snap_type: &str, timestamp: OffsetDateTime) -> Result<String, String> {
@@ -200,16 +163,19 @@ fn main() {
             eprintln!("-f requires one or more files");
             exit(2);
         }
-
-        let all_mounts = utils::all_zfs_mounts().expect("could not get ZFS mounts");
-        let zfs_mounts = utils::zfs_mounts(all_mounts).expect("could not process ZFS mounts");
-        files_to_datasets(cli.object.unwrap(), zfs_mounts)
+        match utils::get_mounted_filesystems() {
+            Ok(mounts) => utils::files_to_datasets(&cli.object.unwrap(), mounts),
+            Err(e) => {
+                eprintln!("Failed to get list of mounted filesystems: {}", e);
+                exit(1);
+            }
+        }
     } else if cli.recurse {
         if cli.object.is_none() {
             eprintln!("-r makes no sense without a list of filesystems");
             exit(2);
         } else {
-            dataset_list_recursive(cli.object.unwrap(), all_filesystems)
+            utils::dataset_list_recursive(cli.object.unwrap(), all_filesystems)
         }
     } else {
         dataset_list(cli.object, all_filesystems)
@@ -244,14 +210,7 @@ fn omit_filesystems(filesystem_list: Filesystems, omit_rules: String) -> Filesys
 
     filesystem_list
         .into_iter()
-        .filter(|f| {
-            !rules.iter().any(|rule| match rule.as_str() {
-                r if r.starts_with('*') && r.ends_with('*') => f.contains(&r[1..r.len() - 1]),
-                r if r.starts_with('*') => f.ends_with(&r[1..]),
-                r if r.ends_with('*') => f.starts_with(&r[..r.len() - 1]),
-                r => f == r,
-            })
-        })
+        .filter(|item| utils::omit_rules_match(item, &rules))
         .collect()
 }
 
@@ -313,63 +272,6 @@ mod test {
         expected.sort();
         actual.sort();
         assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_dataset_list_recursive() {
-        let arg_list = vec!["build".to_string(), "rpool/test".to_string()];
-
-        let all_filesystems = vec![
-            "build".to_string(),
-            "build/test".to_string(),
-            "build/test/a".to_string(),
-            "rpool".to_string(),
-            "rpool/test".to_string(),
-            "rpool/test_a".to_string(),
-            "other".to_string(),
-            "other/test".to_string(),
-        ];
-
-        let mut expected = vec![
-            "build".to_string(),
-            "build/test".to_string(),
-            "build/test/a".to_string(),
-            "rpool/test".to_string(),
-        ];
-
-        let mut actual = dataset_list_recursive(arg_list, all_filesystems);
-
-        expected.sort();
-        actual.sort();
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_files_to_datasets() {
-        let arg_list = vec![
-            "/build/f1".to_string(),
-            "/build/f2".to_string(),
-            "/rpool/f3".to_string(),
-        ];
-
-        let mount_list = vec![
-            (PathBuf::from("/build"), "fast/zone/build/build".to_string()),
-            (
-                PathBuf::from("/build/configs"),
-                "fast/zone/build/config".to_string(),
-            ),
-            (PathBuf::from("/rpool"), "rpool".to_string()),
-        ];
-
-        let mut expected = vec!["fast/zone/build/build".to_string(), "rpool".to_string()];
-        let mut actual = files_to_datasets(arg_list, mount_list.clone());
-        expected.sort();
-        actual.sort();
-
-        assert_eq!(expected, actual);
-
-        assert!(files_to_datasets(vec!["/where/is/this".to_string()], mount_list).is_empty());
     }
 
     #[test]

@@ -1,10 +1,8 @@
 use clap::Parser;
-use common::types::{ArgList, MountList, Opts, SnapshotList, SnapshotResult};
+use common::types::{ArgList, Opts, SnapshotList, SnapshotResult};
 use common::utils;
 use regex::Regex;
-use std::collections::HashSet;
 use std::io;
-use std::path::PathBuf;
 use std::process::{exit, Command};
 
 #[derive(Parser)]
@@ -26,6 +24,12 @@ struct Cli {
     /// Be verbose
     #[clap(short, long)]
     verbose: bool,
+    /// Comma-separated list of filesystems from which snapshots should NOT be removed. Accepts * as a wildcard.
+    #[clap(short = 'o', long)]
+    omit_fs: Option<String>,
+    /// Comma-separated list of snapshot names which should NOT be removed. Accepts * as a wildcard.
+    #[clap(short = 'O', long)]
+    omit_snaps: Option<String>,
     /// Recurse down dataset hierarchies
     #[clap(short, long)]
     recurse: bool,
@@ -34,13 +38,54 @@ struct Cli {
     object: Vec<String>,
 }
 
-fn snapshot_list_from_file_names(list: &ArgList, mounts: MountList) -> SnapshotResult {
-    let datasets: HashSet<String> = list
-        .iter()
-        .filter_map(|f| utils::dataset_from_file(&PathBuf::from(f), &mounts))
-        .collect();
+// If any removal fails, fail the whole lot.
+fn remove_snaps(list: SnapshotList, opts: Opts) -> Result<(), std::io::Error> {
+    for snap in list {
+        // Double check that we aren't going to remove a dataset
+        if !snap.contains("@") {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("refusing to remove {}", snap),
+            ));
+        }
 
-    snapshot_list_from_dataset_paths(&datasets.into_iter().collect())
+        let mut cmd = Command::new(utils::ZFS);
+        cmd.arg("destroy").arg(&snap);
+
+        if opts.verbose || opts.noop {
+            println!("{}", utils::format_command(&cmd));
+        }
+
+        if !opts.noop {
+            cmd.status()?;
+        }
+    }
+
+    Ok(())
+}
+
+fn filter_list(snapshot_list: SnapshotList, omit_rules: &str, is_snapshot: bool) -> SnapshotList {
+    let rules: Vec<_> = omit_rules.split(',').map(|s| s.to_string()).collect();
+
+    snapshot_list
+        .into_iter()
+        .filter(|f| {
+            if let Some((fs_name, snap_name)) = f.split_once("@") {
+                let item = if is_snapshot { snap_name } else { fs_name };
+                utils::omit_rules_match(item, &rules)
+            } else {
+                false
+            }
+        })
+        .collect()
+}
+
+fn filter_by_snap_name(snapshot_list: SnapshotList, omit_rules: &str) -> SnapshotList {
+    filter_list(snapshot_list, omit_rules, true)
+}
+
+fn filter_by_fs_name(snapshot_list: SnapshotList, omit_rules: &str) -> SnapshotList {
+    filter_list(snapshot_list, omit_rules, false)
 }
 
 // Not to be confused with snapshot_list_from_dataset_names(), which only expects
@@ -105,44 +150,42 @@ fn snapshot_list_from_snap_names(snaplist: &ArgList) -> SnapshotResult {
     Ok(ret)
 }
 
-// If any removal fails, fail the whole lot.
-fn remove_snaps(list: SnapshotList, opts: Opts) -> Result<(), std::io::Error> {
-    for snap in list {
-        // Double check that we aren't going to remove a dataset
-        if !snap.contains("@") {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("refusing to remove {}", snap),
-            ));
-        }
-
-        let mut cmd = Command::new(utils::ZFS);
-        cmd.arg("destroy").arg(&snap);
-
-        if opts.verbose || opts.noop {
-            println!("{}", utils::format_command(&cmd));
-        }
-
-        if !opts.noop {
-            cmd.status()?;
-        }
-    }
-
-    Ok(())
-}
-
 fn snapshot_list(cli: &Cli) -> SnapshotResult {
+    let mut arg_list = cli.object.clone();
+
     if cli.snaps {
-        snapshot_list_from_snap_names(&cli.object)
-    } else if cli.all {
-        snapshot_list_from_dataset_names(&cli.object)
-    } else if cli.files {
-        let all_mounts = utils::all_zfs_mounts()?;
-        let zfs_mounts = utils::zfs_mounts(all_mounts)?;
-        snapshot_list_from_file_names(&cli.object, zfs_mounts)
-    } else {
-        snapshot_list_from_dataset_paths(&cli.object)
+        if cli.recurse {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "-r is not allowed with snapshot arguments",
+            )));
+        } else {
+            return snapshot_list_from_snap_names(&arg_list);
+        }
     }
+
+    if cli.all {
+        if cli.recurse {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "-r is not allowed with dataset name arguments",
+            )));
+        } else {
+            return snapshot_list_from_dataset_names(&arg_list);
+        }
+    }
+
+    if cli.files {
+        let mounts = utils::get_mounted_filesystems()?;
+        arg_list = utils::files_to_datasets(&arg_list, mounts);
+    }
+
+    if cli.recurse {
+        let all_filesystems = utils::all_filesystems()?;
+        arg_list = utils::dataset_list_recursive(arg_list, all_filesystems);
+    }
+
+    snapshot_list_from_dataset_paths(&arg_list)
 }
 
 fn main() {
@@ -152,13 +195,21 @@ fn main() {
         noop: cli.noop,
     };
 
-    let snapshot_list = match snapshot_list(&cli) {
+    let mut snapshot_list = match snapshot_list(&cli) {
         Ok(list) => list,
         Err(e) => {
             eprintln!("ERROR: could not generate snapshot list: {}", e);
             exit(1);
         }
     };
+
+    if let Some(omit_snaps) = cli.omit_snaps {
+        snapshot_list = filter_by_snap_name(snapshot_list, &omit_snaps);
+    }
+
+    if let Some(omit_fs) = cli.omit_fs {
+        snapshot_list = filter_by_fs_name(snapshot_list, &omit_fs);
+    }
 
     if snapshot_list.is_empty() {
         println!("No snapshots to remove.");
@@ -167,5 +218,85 @@ fn main() {
 
     if let Err(err) = remove_snaps(snapshot_list, opts) {
         eprintln!("ERROR: could not remove snapshot: {}", err);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_filter_by_snap_name() {
+        let input: SnapshotList = vec![
+            "rpool/test@snap1".to_string(),
+            "rpool/test@snap2".to_string(),
+            "rpool/test@mysnap1".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        let expected1: SnapshotList = vec!["rpool/test@mysnap1".to_string()];
+
+        assert_eq!(expected1, filter_by_snap_name(input.clone(), "snap*,other"));
+
+        let expected2: SnapshotList = vec![
+            "rpool/test@snap2".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        assert_eq!(expected2, filter_by_snap_name(input.clone(), "*1"));
+
+        let expected3: SnapshotList = vec![
+            "rpool/test@snap1".to_string(),
+            "rpool/test@snap2".to_string(),
+            "rpool/test@mysnap1".to_string(),
+        ];
+
+        assert_eq!(expected3, filter_by_snap_name(input.clone(), "*t*"));
+
+        assert_eq!(
+            input,
+            filter_by_snap_name(input.clone(), "nothing,matches,*this")
+        );
+    }
+
+    #[test]
+    fn test_filter_by_fs_name() {
+        let input: SnapshotList = vec![
+            "rpool/test1@snap1".to_string(),
+            "rpool/test2@snap2".to_string(),
+            "rpool/test1@mysnap1".to_string(),
+            "test/data@snap".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        let expected1: SnapshotList = vec![
+            "rpool/test1@snap1".to_string(),
+            "rpool/test2@snap2".to_string(),
+            "rpool/test1@mysnap1".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        assert_eq!(expected1, filter_by_fs_name(input.clone(), "test/*"));
+
+        let expected2: SnapshotList = vec![
+            "rpool/test2@snap2".to_string(),
+            "test/data@snap".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        assert_eq!(expected2, filter_by_fs_name(input.clone(), "*1"));
+
+        let expected3: SnapshotList = vec![
+            "rpool/test2@snap2".to_string(),
+            "test/data@snap".to_string(),
+            "rpool/test@other".to_string(),
+        ];
+
+        assert_eq!(expected3, filter_by_fs_name(input.clone(), "*test1,test2"));
+
+        let expected4: SnapshotList = vec![];
+        assert_eq!(expected4, filter_by_fs_name(input.clone(), "*t*"));
+
+        assert_eq!(input, filter_by_fs_name(input.clone(), "snap"));
     }
 }

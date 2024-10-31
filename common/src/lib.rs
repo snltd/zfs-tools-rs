@@ -9,6 +9,8 @@ pub mod types {
     pub type SnapshotList = Vec<String>;
     pub type SnapshotResult = Result<SnapshotList, Box<dyn Error>>;
     pub type MountList = Vec<(PathBuf, String)>;
+    pub type Filesystems = Vec<String>;
+    pub type ZfsMounts = Vec<(PathBuf, String)>;
 
     pub struct Opts {
         pub verbose: bool,
@@ -17,7 +19,8 @@ pub mod types {
 }
 
 pub mod utils {
-    use crate::types::MountList;
+    use crate::types::{Filesystems, MountList, ZfsMounts};
+    use std::collections::HashSet;
     use std::error::Error;
     use std::fs;
     use std::io;
@@ -87,10 +90,15 @@ pub mod utils {
         })
     }
 
+    pub fn get_mounted_filesystems() -> Result<MountList, Box<dyn Error>> {
+        let all_mounts = all_zfs_mounts()?;
+        mounted_filesystems(all_mounts)
+    }
+
     /// Returns a vec of all the ZFS mounts which are not 'legacy', sorted by the
     /// length of the path
     ///
-    pub fn zfs_mounts(mounts: Vec<String>) -> Result<MountList, Box<dyn Error>> {
+    pub fn mounted_filesystems(mounts: Vec<String>) -> Result<MountList, Box<dyn Error>> {
         let mut ret: Vec<(PathBuf, String)> = mounts
             .iter()
             .filter_map(|line| {
@@ -159,6 +167,50 @@ pub mod utils {
             ))
         }
     }
+
+    pub fn omit_rules_match(item: &str, rules: &[String]) -> bool {
+        !rules.iter().any(|rule| match rule.as_str() {
+            r if r.starts_with('*') && r.ends_with('*') => item.contains(&r[1..r.len() - 1]),
+            r if r.starts_with('*') => item.ends_with(&r[1..]),
+            r if r.ends_with('*') => item.starts_with(&r[..r.len() - 1]),
+            r => item == r,
+        })
+    }
+
+    pub fn ensure_trailing_slash(path: &str) -> String {
+        if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{}/", path)
+        }
+    }
+
+    pub fn dataset_list_recursive(
+        from_user: Vec<String>,
+        all_filesystems: Filesystems,
+    ) -> Filesystems {
+        let unique_datasets: HashSet<String> = from_user
+            .into_iter()
+            .flat_map(|path| {
+                let formatted_path = ensure_trailing_slash(&path);
+                all_filesystems
+                    .iter()
+                    .filter(move |fs| *fs == &path || fs.starts_with(&formatted_path))
+                    .map(|fs| fs.to_owned())
+            })
+            .collect();
+
+        unique_datasets.into_iter().collect()
+    }
+
+    pub fn files_to_datasets(file_list: &[String], zfs_mounts: ZfsMounts) -> Filesystems {
+        let filesystems: HashSet<String> = file_list
+            .iter()
+            .filter_map(|f| dataset_from_file(&PathBuf::from(f), &zfs_mounts))
+            .collect();
+
+        filesystems.into_iter().collect()
+    }
 }
 
 #[cfg(test)]
@@ -219,7 +271,7 @@ mod test {
 
         assert_eq!(
             expected,
-            zfs_mounts(
+            mounted_filesystems(
                 read_to_string("test/resources/mountpoint_list.txt")
                     .unwrap()
                     .lines()
@@ -260,5 +312,62 @@ mod test {
             Some("fast/zone/build/config".to_string()),
             dataset_from_file(&PathBuf::from("/build/configs/file"), &mounts)
         );
+    }
+
+    #[test]
+    fn test_dataset_list_recursive() {
+        let arg_list = vec!["build".to_string(), "rpool/test".to_string()];
+
+        let all_filesystems = vec![
+            "build".to_string(),
+            "build/test".to_string(),
+            "build/test/a".to_string(),
+            "rpool".to_string(),
+            "rpool/test".to_string(),
+            "rpool/test_a".to_string(),
+            "other".to_string(),
+            "other/test".to_string(),
+        ];
+
+        let mut expected = vec![
+            "build".to_string(),
+            "build/test".to_string(),
+            "build/test/a".to_string(),
+            "rpool/test".to_string(),
+        ];
+
+        let mut actual = dataset_list_recursive(arg_list, all_filesystems);
+
+        expected.sort();
+        actual.sort();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_files_to_datasets() {
+        let arg_list = &[
+            "/build/f1".to_string(),
+            "/build/f2".to_string(),
+            "/rpool/f3".to_string(),
+        ];
+
+        let mount_list = vec![
+            (PathBuf::from("/build"), "fast/zone/build/build".to_string()),
+            (
+                PathBuf::from("/build/configs"),
+                "fast/zone/build/config".to_string(),
+            ),
+            (PathBuf::from("/rpool"), "rpool".to_string()),
+        ];
+
+        let mut expected = vec!["fast/zone/build/build".to_string(), "rpool".to_string()];
+        let mut actual = files_to_datasets(arg_list, mount_list.clone());
+        expected.sort();
+        actual.sort();
+
+        assert_eq!(expected, actual);
+
+        assert!(files_to_datasets(&["/where/is/this".to_string()], mount_list).is_empty());
     }
 }
