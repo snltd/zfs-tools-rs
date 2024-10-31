@@ -1,4 +1,6 @@
-# ZFS Tools [![Test](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml/badge.svg)](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml)
+# ZFS Tools
+
+[![Test](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml/badge.svg)](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml)
 
 Rust rewrites of some shell and Ruby scripts I've been using for years. Some of
 what they do is now replicated in illumos.
@@ -57,6 +59,18 @@ you use...
 ## zfs-snap
 
 ## zfs-touch-from-snap
+
+Compares a live filesystem with one of its snapshots, and modifies the mtimes of
+the live files, using the snapshot contents as a reference.
+
+- `-s` (`--snapname`) tells the program which snapshot to use. If you do not
+  supply one, it will assume you have snapshots `monday` through `sunday`, and
+  use yesterday's.
+
+- `-n` (`--noop`) prints the actions it would take, without actually taking
+  them.
+
+- `-v` (`--verbose`) prints the actions it takes, as it takes them.
 
 ## zp
 
