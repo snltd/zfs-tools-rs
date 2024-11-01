@@ -10,7 +10,7 @@ use time::{format_description, OffsetDateTime};
 struct Cli {
     #[clap(
         short = 't',
-        long,
+        long = "type",
         long_help = "Specify the type of snapshot to take: this  determines the \
         snapshot names\n  e.g  day    @wednesday\n       month  @january\n       \
         date   @2008-30-01\n       time   @08:45\n       now    @2008-30-01_08:45:00"
