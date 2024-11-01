@@ -114,3 +114,6 @@ down.
 * `-v` (`--verbose`) prints actions as they are taken.
 
 ## zr
+
+[Here is an article](https://sysdef.xyz/post/2019-04-04-zr) about the original
+Ruby versions of `zr` and `zp`.
