@@ -26,6 +26,7 @@ Batch-removes ZFS snapshots.
 - `-a` (`--all-datasets`) tells the program to remove snapshots under all
   filesystems whose name matches any of the arguments. So `-a logs` would remove
   snaps for `rpool/logs` `rpool/application/logs` and `tank/logs`.
+
 - `-s` (`--snaps`) means that all arguments are snapshot names. `-s monday`
   would remove all `@monday` snapshots anywhere in your hierarchy.
 
@@ -58,14 +59,37 @@ you use...
 
 ## zfs-snap
 
+This program takes ZFS snapshots with an automated naming scheme.
+
+- `-t` (`--type`) specifies the format of the snapshot name, Choose from `day`,
+  which uses the day of the week, lowercased; `month`; `date`, which is
+  formatted `YYYY-mm-dd`; `time`, formatted `HH:MM`; and `now`, which formats
+  the current time as `YYYY-mm-dd_HH:MM:SS`.
+
+- `-f (`--files`) has the program work out the ZFS filesystem name from a file
+  path.
+
+- `-r` (`--recurse`) recurses down ZFS hierarchies.
+
+- `-o` (`--omit`) lets you specify filesystems which will NOT be snapshotted.
+  This is applied after any recursion is calculated. You can use asterisks as
+  wildcards in the same way as `zfs-remove-snaps`.
+
+- `-n` (`--noop`) makes the program print the `zfs` commands it would run,
+  without actually running them.
+
+- `-v` (`--verbose`) prints the `zfs` commands as they are run.
+
+Existing snapshots with the same names are removed.
+
 ## zfs-touch-from-snap
 
 Compares a live filesystem with one of its snapshots, and modifies the mtimes of
 the live files, using the snapshot contents as a reference.
 
-- `-s` (`--snapname`) tells the program which snapshot to use. If you do not
-  supply one, it will assume you have snapshots `monday` through `sunday`, and
-  use yesterday's.
+- `-s SNAPSHOT` (`--snapname`) tells the program which snapshot to use. If you
+  do not supply one, it will assume you have snapshots `monday` through
+  `sunday`, and use yesterday's.
 
 - `-n` (`--noop`) prints the actions it would take, without actually taking
   them.
@@ -73,5 +97,20 @@ the live files, using the snapshot contents as a reference.
 - `-v` (`--verbose`) prints the actions it takes, as it takes them.
 
 ## zp
+
+Promotes files from a ZFS snapshot. Specify the file inside the snapshot
+directory, for instance `zp /tank/.zfs/snapshot/monday/my/example/file`, and it
+will copy `my/example/file` relative to the mounted filesystem root. It is a
+less-useful companion to `zr`.
+
+`zp` is automatically recursive: promoting a directory promotes it all the way
+down.
+
+- `-N` (`--noclobber`) by default, `zp` will overwrite any existing files. Use
+  this option to preserve them.
+
+* `-n` (`--noop`) prints actions without actually taking them.
+
+* `-v` (`--verbose`) prints actions as they are taken.
 
 ## zr
