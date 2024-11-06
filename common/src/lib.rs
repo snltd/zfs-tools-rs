@@ -16,10 +16,16 @@ pub mod types {
         pub verbose: bool,
         pub noop: bool,
     }
+
+    pub struct ZpZrOpts {
+        pub verbose: bool,
+        pub noop: bool,
+        pub noclobber: bool,
+    }
 }
 
 pub mod utils {
-    use crate::types::{Filesystems, MountList, ZfsMounts};
+    use crate::types::{Filesystems, MountList, ZfsMounts, ZpZrOpts};
     use std::collections::HashSet;
     use std::error::Error;
     use std::fs;
@@ -210,6 +216,58 @@ pub mod utils {
             .collect();
 
         filesystems.into_iter().collect()
+    }
+
+    fn copy_file_action(src: &Path, dest: &Path, opts: &ZpZrOpts) -> Result<u64, std::io::Error> {
+        if dest.exists() && opts.noclobber {
+            if opts.verbose {
+                println!("{} exists and noclobber is set", dest.display());
+            }
+            Ok(0)
+        } else {
+            if opts.verbose || opts.noop {
+                println!("{} -> {}", src.display(), dest.display());
+            }
+
+            if opts.noop || (src.is_dir() && dest.exists()) {
+                Ok(0)
+            } else {
+                fs::copy(src, dest)
+            }
+        }
+    }
+
+    pub fn copy_file(src: &Path, dest: &Path, opts: &ZpZrOpts) -> Result<u64, std::io::Error> {
+        if src.is_file() {
+            copy_file_action(src, dest, opts)
+        } else {
+            if !dest.exists() {
+                fs::create_dir_all(dest)?;
+            }
+
+            for f in fs::read_dir(src)? {
+                let f = f?;
+                let src_path = f.path();
+                let dest_path = dest.join(f.file_name());
+
+                if src.is_file() {
+                    copy_file_action(&src_path, &dest_path, opts)?;
+                } else {
+                    copy_file(&src_path, &dest_path, opts)?;
+                }
+            }
+
+            Ok(0)
+        }
+    }
+}
+
+pub mod spec_helper {
+    use std::env::current_dir;
+    use std::path::PathBuf;
+
+    pub fn fixture(dir: &str) -> PathBuf {
+        current_dir().unwrap().join("test/resources").join(dir)
     }
 }
 

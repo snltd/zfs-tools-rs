@@ -1,14 +1,9 @@
-use clap::ArgAction;
-use clap::Parser;
+use clap::{ArgAction, Parser};
+use common::types::ZpZrOpts;
+use common::utils;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-struct Opts {
-    verbose: bool,
-    noop: bool,
-    noclobber: bool,
-}
 
 #[derive(Parser)]
 #[clap(version, about = "Promotes files from ZFS snapshots")]
@@ -26,49 +21,6 @@ struct Cli {
     /// File(s) to promote
     #[clap()]
     file_list: Vec<String>,
-}
-
-fn copy_file_action(src: &Path, dest: &Path, opts: &Opts) -> Result<u64, std::io::Error> {
-    if dest.exists() && opts.noclobber {
-        if opts.verbose {
-            println!("{} exists and noclobber is set", dest.display());
-        }
-        Ok(0)
-    } else {
-        if opts.verbose || opts.noop {
-            println!("{} -> {}", src.display(), dest.display());
-        }
-
-        if opts.noop || (src.is_dir() && dest.exists()) {
-            Ok(0)
-        } else {
-            fs::copy(src, dest)
-        }
-    }
-}
-
-fn copy_file(src: &Path, dest: &Path, opts: &Opts) -> Result<u64, std::io::Error> {
-    if src.is_file() {
-        copy_file_action(src, dest, opts)
-    } else {
-        if !dest.exists() {
-            fs::create_dir_all(dest)?;
-        }
-
-        for f in fs::read_dir(src)? {
-            let f = f?;
-            let src_path = f.path();
-            let dest_path = dest.join(f.file_name());
-
-            if src.is_file() {
-                copy_file_action(&src_path, &dest_path, opts)?;
-            } else {
-                copy_file(&src_path, &dest_path, opts)?;
-            }
-        }
-
-        Ok(0)
-    }
 }
 
 fn in_snapshot(file: &Path) -> bool {
@@ -107,7 +59,7 @@ fn target_file(file: &Path) -> Option<PathBuf> {
 fn main() {
     let cli = Cli::parse();
 
-    let opts = Opts {
+    let opts = ZpZrOpts {
         verbose: cli.verbose,
         noop: cli.noop,
         noclobber: cli.noclobber,
@@ -167,7 +119,7 @@ fn main() {
             }
         }
 
-        if let Err(e) = copy_file(&file, &target_file, &opts) {
+        if let Err(e) = utils::copy_file(&file, &target_file, &opts) {
             eprintln!(
                 "Failed to copy {} to {}: {}",
                 &file.display(),

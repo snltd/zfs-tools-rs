@@ -1,0 +1,14 @@
+[package]
+name = "zr"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.3", features = ["derive"] }
+common = { path = "../common" }
+colored = "2.1"
+regex = "1"
+time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
+
+[dev-dependencies]
+tempfile = "3.13"
