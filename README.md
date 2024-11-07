@@ -115,5 +115,22 @@ down.
 
 ## zr
 
+Recovers files from ZFS snapshots. Give it a filename, and it will find all
+copies of said file in snapshots, and display them in a list with their size and
+time of last modification. Pick the one you want, and it will be copied into its
+correct place in the live filesystem. Works on files and directories.
+
+- `-a` (`--auto`) will make `zr` recover the most recently modified file rather
+  than showing you a list and prompting for input,
+
+- `-N` (`--noclobber`) by default, `zr` will overwrite any existing files. Use
+  this option to preserve them. This can be useful if you want to recover lost
+  files in a directory without getting back old versions of things which have
+  changed.
+
+* `-n` (`--noop`) prints actions without actually taking them.
+
+* `-v` (`--verbose`) prints actions as they are taken.
+
 [Here is an article](https://sysdef.xyz/post/2019-04-04-zr) about the original
 Ruby versions of `zr` and `zp`.
