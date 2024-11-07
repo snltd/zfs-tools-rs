@@ -310,6 +310,7 @@ mod test {
             verbose: false,
             noop: false,
             auto: true,
+            noclobber: false,
         };
 
         let result = restore_action(&file_path, &cli);
@@ -331,6 +332,7 @@ mod test {
             verbose: false,
             noop: false,
             auto: false,
+            noclobber: false,
         };
 
         let result = restore_action(&file_path, &cli);
