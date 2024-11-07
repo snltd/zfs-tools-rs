@@ -28,7 +28,7 @@ struct Cli {
     #[clap(short = 'N', long, action=ArgAction::SetTrue)]
     noclobber: bool,
     /// File(s) to restore
-    #[clap()]
+    #[clap(required = true, num_args = 1..)]
     file_list: Vec<String>,
 }
 
