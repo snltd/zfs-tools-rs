@@ -1,6 +1,9 @@
 use clap::Parser;
+use common::command_helpers::format_command;
+use common::constants::ZFS;
 use common::types::{Filesystems, Opts};
-use common::utils;
+use common::{rules, zfs_file, zfs_info};
+use std::io;
 use std::process::{exit, Command};
 use time::{format_description, OffsetDateTime};
 
@@ -75,11 +78,11 @@ fn take_snapshot(snapshot: &str, opts: &Opts) -> bool {
 }
 
 fn snapshot_command(snapshot: &str, action: &str, opts: &Opts, hush: bool) -> bool {
-    let mut cmd = Command::new(utils::ZFS);
+    let mut cmd = Command::new(ZFS);
     cmd.arg(action).arg(snapshot);
 
     if opts.verbose || opts.noop {
-        println!("{}", utils::format_command(&cmd));
+        println!("{}", format_command(&cmd));
     }
 
     if opts.noop {
@@ -106,11 +109,7 @@ fn snapshot_command(snapshot: &str, action: &str, opts: &Opts, hush: bool) -> bo
     }
 }
 
-fn do_the_snapshotting(
-    dataset_list: Filesystems,
-    snapname: String,
-    opts: Opts,
-) -> Result<(), std::io::Error> {
+fn do_the_snapshotting(dataset_list: Filesystems, snapname: String, opts: Opts) -> io::Result<()> {
     let mut errs = 0;
 
     for dataset in dataset_list {
@@ -152,7 +151,7 @@ fn main() {
     let all_filesystems: Vec<String> = if cli.files {
         Vec::new()
     } else {
-        utils::all_filesystems().unwrap_or_else(|e| {
+        zfs_info::all_filesystems().unwrap_or_else(|e| {
             eprintln!("Could not get a list of filesystems: {}", e);
             exit(1);
         })
@@ -163,8 +162,8 @@ fn main() {
             eprintln!("-f requires one or more files");
             exit(2);
         }
-        match utils::get_mounted_filesystems() {
-            Ok(mounts) => utils::files_to_datasets(&cli.object.unwrap(), mounts),
+        match zfs_info::get_mounted_filesystems() {
+            Ok(mounts) => zfs_file::files_to_datasets(&cli.object.unwrap(), mounts),
             Err(e) => {
                 eprintln!("Failed to get list of mounted filesystems: {}", e);
                 exit(1);
@@ -175,7 +174,7 @@ fn main() {
             eprintln!("-r makes no sense without a list of filesystems");
             exit(2);
         } else {
-            utils::dataset_list_recursive(cli.object.unwrap(), all_filesystems)
+            zfs_info::dataset_list_recursive(cli.object.unwrap(), all_filesystems)
         }
     } else {
         dataset_list(cli.object, all_filesystems)
@@ -210,7 +209,7 @@ fn omit_filesystems(filesystem_list: Filesystems, omit_rules: String) -> Filesys
 
     filesystem_list
         .into_iter()
-        .filter(|item| utils::omit_rules_match(item, &rules))
+        .filter(|item| rules::omit_rules_match(item, &rules))
         .collect()
 }
 

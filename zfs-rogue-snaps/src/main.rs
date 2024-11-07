@@ -1,4 +1,4 @@
-use common::utils;
+use common::zfs_info;
 use regex::Regex;
 
 fn filter_fn(snapshot: &String, expected: &[String], regex: &Regex) -> Option<String> {
@@ -46,7 +46,7 @@ fn main() {
         "december".to_string(),
     ];
 
-    let all_snapshots = match utils::all_snapshots() {
+    let all_snapshots = match zfs_info::all_snapshots() {
         Ok(list) => list,
         Err(e) => {
             eprintln!("Failed to get snapshot list: {}", e);

@@ -1,5 +1,6 @@
 use clap::Parser;
 use common::types::Opts;
+use common::zfs_file;
 use filetime::{set_file_times, FileTime};
 use glob::glob;
 use std::collections::HashMap;
@@ -29,8 +30,8 @@ struct Cli {
     object: Vec<String>,
 }
 
-fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> Result<(), io::Error> {
-    let snapshot_dir = match common::utils::snapshot_dir(dir) {
+fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> io::Result<()> {
+    let snapshot_dir = match zfs_file::snapshot_dir_from_file(dir) {
         Some(snapshot_root) => snapshot_root.join(snapshot_name),
         None => {
             return Err(std::io::Error::new(
@@ -77,7 +78,7 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> Result<(), i
     }
 }
 
-fn set_timestamp(file: &Path, ts: SystemTime) -> Result<(), io::Error> {
+fn set_timestamp(file: &Path, ts: SystemTime) -> io::Result<()> {
     let mtime = FileTime::from_system_time(ts);
     File::open(file)?;
     set_file_times(file, mtime, mtime)

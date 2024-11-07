@@ -1,6 +1,9 @@
 use clap::Parser;
+use common::command_helpers::format_command;
+use common::constants::ZFS;
+use common::rules::omit_rules_match;
 use common::types::{ArgList, Opts, SnapshotList, SnapshotResult};
-use common::utils;
+use common::{zfs_file, zfs_info};
 use regex::Regex;
 use std::io;
 use std::process::{exit, Command};
@@ -39,7 +42,7 @@ struct Cli {
 }
 
 // If any removal fails, fail the whole lot.
-fn remove_snaps(list: SnapshotList, opts: Opts) -> Result<(), std::io::Error> {
+fn remove_snaps(list: SnapshotList, opts: Opts) -> io::Result<()> {
     for snap in list {
         // Double check that we aren't going to remove a dataset
         if !snap.contains("@") {
@@ -49,11 +52,11 @@ fn remove_snaps(list: SnapshotList, opts: Opts) -> Result<(), std::io::Error> {
             ));
         }
 
-        let mut cmd = Command::new(utils::ZFS);
+        let mut cmd = Command::new(ZFS);
         cmd.arg("destroy").arg(&snap);
 
         if opts.verbose || opts.noop {
-            println!("{}", utils::format_command(&cmd));
+            println!("{}", format_command(&cmd));
         }
 
         if !opts.noop {
@@ -72,7 +75,7 @@ fn filter_list(snapshot_list: SnapshotList, omit_rules: &str, is_snapshot: bool)
         .filter(|f| {
             if let Some((fs_name, snap_name)) = f.split_once("@") {
                 let item = if is_snapshot { snap_name } else { fs_name };
-                utils::omit_rules_match(item, &rules)
+                omit_rules_match(item, &rules)
             } else {
                 false
             }
@@ -91,7 +94,7 @@ fn filter_by_fs_name(snapshot_list: SnapshotList, omit_rules: &str) -> SnapshotL
 // Not to be confused with snapshot_list_from_dataset_names(), which only expects
 // the last segment of the name. This uses the whole path.
 fn snapshot_list_from_dataset_paths(dataset_list: &ArgList) -> SnapshotResult {
-    let ret: SnapshotList = utils::all_snapshots()?
+    let ret: SnapshotList = zfs_info::all_snapshots()?
         .iter()
         .filter_map(|line| {
             if dataset_list
@@ -117,7 +120,7 @@ fn snapshot_list_from_dataset_names(dataset_list: &ArgList) -> SnapshotResult {
 
     let patterns = patterns?;
 
-    let ret: SnapshotList = utils::all_snapshots()?
+    let ret: SnapshotList = zfs_info::all_snapshots()?
         .iter()
         .filter_map(|line| {
             if patterns.iter().any(|pattern| pattern.is_match(line)) {
@@ -133,7 +136,7 @@ fn snapshot_list_from_dataset_names(dataset_list: &ArgList) -> SnapshotResult {
 
 // All snapshots with the names given in list
 fn snapshot_list_from_snap_names(snaplist: &ArgList) -> SnapshotResult {
-    let ret = utils::all_snapshots()?
+    let ret = zfs_info::all_snapshots()?
         .iter()
         .filter_map(|line| {
             if snaplist
@@ -176,13 +179,13 @@ fn snapshot_list(cli: &Cli) -> SnapshotResult {
     }
 
     if cli.files {
-        let mounts = utils::get_mounted_filesystems()?;
-        arg_list = utils::files_to_datasets(&arg_list, mounts);
+        let mounts = zfs_info::get_mounted_filesystems()?;
+        arg_list = zfs_file::files_to_datasets(&arg_list, mounts);
     }
 
     if cli.recurse {
-        let all_filesystems = utils::all_filesystems()?;
-        arg_list = utils::dataset_list_recursive(arg_list, all_filesystems);
+        let all_filesystems = zfs_info::all_filesystems()?;
+        arg_list = zfs_info::dataset_list_recursive(arg_list, all_filesystems);
     }
 
     snapshot_list_from_dataset_paths(&arg_list)

@@ -1,6 +1,6 @@
 use clap::{ArgAction, Parser};
+use common::file_copier;
 use common::types::ZpZrOpts;
-use common::utils;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -119,7 +119,7 @@ fn main() {
             }
         }
 
-        if let Err(e) = utils::copy_file(&file, &target_file, &opts) {
+        if let Err(e) = file_copier::copy_file(&file, &target_file, &opts) {
             eprintln!(
                 "Failed to copy {} to {}: {}",
                 &file.display(),

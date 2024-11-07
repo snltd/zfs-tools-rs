@@ -1,12 +1,13 @@
 use byte_unit::Byte;
-use common::utils;
+use common::constants::ZFS;
 use std::{
+    io,
     process::{exit, Command, Output},
     string::FromUtf8Error,
 };
 
-fn list_dataset_usage() -> Result<Output, std::io::Error> {
-    Command::new(utils::ZFS)
+fn list_dataset_usage() -> io::Result<Output> {
+    Command::new(ZFS)
         .arg("list")
         .arg("-t")
         .arg("all")

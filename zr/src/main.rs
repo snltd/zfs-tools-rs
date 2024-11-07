@@ -1,10 +1,10 @@
 mod types;
 mod user_interaction;
 
-use crate::types::{Candidate, Candidates, CandidatesResult, CopyActionResult};
+use crate::types::{Candidate, Candidates, CopyAction};
 use clap::Parser;
 use common::types::ZpZrOpts;
-use common::utils;
+use common::{file_copier, zfs_info};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -41,11 +41,11 @@ fn all_snapshot_dirs(dataset_root: &Path) -> Option<Vec<PathBuf>> {
     }
 }
 
-fn restore_action(file: &Path, cli: &Cli) -> CopyActionResult {
+fn restore_action(file: &Path, cli: &Cli) -> io::Result<CopyAction> {
     // file may well not exist, so let's assume user error if it's PARENT isn't there
     let parent = file.parent().unwrap();
     let target_dir = parent.canonicalize()?;
-    let filesystem_root = utils::dataset_root(&target_dir)?;
+    let filesystem_root = zfs_info::dataset_root(&target_dir)?;
     let mut candidates = candidates(&filesystem_root, file)?;
 
     if candidates.is_empty() {
@@ -129,7 +129,7 @@ fn backup_target(src: &Path, cli: &Cli) -> io::Result<()> {
     }
 }
 
-fn candidates(filesystem_root: &Path, file: &Path) -> CandidatesResult {
+fn candidates(filesystem_root: &Path, file: &Path) -> io::Result<Candidates> {
     let snapshot_dirs = match all_snapshot_dirs(filesystem_root) {
         Some(dirs) => dirs,
         None => {
@@ -216,7 +216,7 @@ fn main() {
 
         match restore_action(&PathBuf::from(&f), &cli) {
             Ok(Some((src, dest))) => {
-                if let Err(e) = common::utils::copy_file(&src, &dest, &opts) {
+                if let Err(e) = file_copier::copy_file(&src, &dest, &opts) {
                     eprintln!("ERROR restoring {}: {}", &f.display(), e);
                     errs += 1;
                 }

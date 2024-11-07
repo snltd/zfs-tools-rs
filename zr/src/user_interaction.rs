@@ -1,4 +1,4 @@
-use crate::types::{Candidate, Candidates, IoResult, UserChoice};
+use crate::types::{Candidate, Candidates, UserChoice};
 use colored::Colorize;
 use regex::Regex;
 use std::io::{self, Write};
@@ -17,7 +17,7 @@ pub fn print_options(original_file: Option<Candidate>, candidates: &Candidates) 
     }
 }
 
-pub fn get_choice() -> IoResult<String> {
+pub fn get_choice() -> io::Result<String> {
     print!("choose file to promote [add 'd' for diff, 'k' to keep] > ");
     io::stdout().flush().unwrap();
     let mut buffer = String::new();
