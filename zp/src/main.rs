@@ -15,7 +15,7 @@ struct Cli {
     /// Be verbose
     #[clap(short, long)]
     verbose: bool,
-    /// by default, existing live files are overwritten. With this option, they are not
+    /// By default, existing live files are overwritten. With this option, they are not
     #[clap(short = 'N', long, action=ArgAction::SetTrue)]
     noclobber: bool,
     /// File(s) to promote
