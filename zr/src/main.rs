@@ -2,7 +2,8 @@ mod types;
 mod user_interaction;
 
 use crate::types::{Candidate, Candidates, CopyAction};
-use clap::Parser;
+use clap::{ArgAction, Parser};
+use common::constants::DIFF;
 use common::types::ZpZrOpts;
 use common::{file_copier, zfs_info};
 use std::os::unix::fs::MetadataExt;
@@ -23,6 +24,9 @@ struct Cli {
     /// Automatically recover the newest backup
     #[clap(short, long)]
     auto: bool,
+    /// By default, existing live files are overwritten. With this option, they are not
+    #[clap(short = 'N', long, action=ArgAction::SetTrue)]
+    noclobber: bool,
     /// File(s) to restore
     #[clap()]
     file_list: Vec<String>,
@@ -42,7 +46,7 @@ fn all_snapshot_dirs(dataset_root: &Path) -> Option<Vec<PathBuf>> {
 }
 
 fn restore_action(file: &Path, cli: &Cli) -> io::Result<CopyAction> {
-    // file may well not exist, so let's assume user error if it's PARENT isn't there
+    // file may well not exist, so let's assume user error if its PARENT isn't there
     let parent = file.parent().unwrap();
     let target_dir = parent.canonicalize()?;
     let filesystem_root = zfs_info::dataset_root(&target_dir)?;
@@ -94,7 +98,7 @@ fn restore_action(file: &Path, cli: &Cli) -> io::Result<CopyAction> {
 }
 
 fn diff_files(source_file: &Path, target_file: &Path) {
-    let mut cmd = Command::new("/bin/diff");
+    let mut cmd = Command::new(DIFF);
     cmd.arg(source_file).arg(target_file);
     match cmd.output() {
         Ok(out) => println!("{}", String::from_utf8_lossy(&out.stdout)),
@@ -208,7 +212,7 @@ fn main() {
     let opts = ZpZrOpts {
         verbose: cli.verbose,
         noop: cli.noop,
-        noclobber: false,
+        noclobber: cli.noclobber,
     };
 
     for file in &cli.file_list {
