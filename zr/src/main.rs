@@ -266,17 +266,20 @@ mod test {
 
     #[test]
     fn test_candidates() {
-        assert_eq!(
-            vec![
-                fixture(".zfs/snapshot/monday/file_in_both"),
-                fixture(".zfs/snapshot/tuesday/file_in_both")
-            ],
-            candidates(&fixture(""), &fixture("file_in_both"))
-                .unwrap()
-                .into_iter()
-                .map(|c| c.path)
-                .collect::<Vec<PathBuf>>()
-        );
+        let mut expected = vec![
+            fixture(".zfs/snapshot/monday/file_in_both"),
+            fixture(".zfs/snapshot/tuesday/file_in_both"),
+        ];
+
+        let mut actual = candidates(&fixture(""), &fixture("file_in_both"))
+            .unwrap()
+            .into_iter()
+            .map(|c| c.path)
+            .collect::<Vec<PathBuf>>();
+
+        expected.sort();
+        actual.sort();
+        assert_eq!(expected, actual);
 
         assert_eq!(
             vec![fixture(".zfs/snapshot/monday/file_in_monday"),],
