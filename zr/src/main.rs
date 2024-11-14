@@ -205,6 +205,17 @@ fn path_relative_to_fs_root(file: &Path, filesystem_root: &Path) -> Option<PathB
     file.strip_prefix(filesystem_root).ok().map(PathBuf::from)
 }
 
+// We need to canonicalize the source file, whether it exists or not.
+fn canonical_file(file: PathBuf) -> io::Result<PathBuf> {
+    if file.is_absolute() {
+        return Ok(file);
+    }
+
+    let pwd = std::env::current_dir()?;
+
+    Ok(pwd.join(file))
+}
+
 fn main() {
     let cli = Cli::parse();
     let mut errs = 0;
@@ -216,7 +227,14 @@ fn main() {
     };
 
     for file in &cli.file_list {
-        let f = PathBuf::from(&file);
+        let f = match canonical_file(PathBuf::from(file)) {
+            Ok(file) => file,
+            Err(e) => {
+                eprintln!("Failed to canonicalize {}: {}", file, e);
+                errs += 1;
+                continue;
+            }
+        };
 
         match restore_action(&PathBuf::from(&f), &cli) {
             Ok(Some((src, dest))) => {

@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "tempfile",
 ]
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-real-usage"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "byte-unit",
  "common",
@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-remove-snaps"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "clap",
  "common",
@@ -1061,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-rogue-snaps"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "common",
  "regex",
@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-snap"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "clap",
  "common",
@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-touch-from-snap"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "clap",
  "common",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "zp"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "clap",
  "common",
@@ -1097,7 +1097,7 @@ dependencies = [
 
 [[package]]
 name = "zr"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "clap",
  "colored",
