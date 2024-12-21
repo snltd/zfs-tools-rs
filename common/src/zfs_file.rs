@@ -1,6 +1,6 @@
-///! Functions, constants, types, and whatever else comes along, which are required by
-///! more than one of the tools in this crate.
-///!
+//! Functions, constants, types, and whatever else comes along, which are required by
+//! more than one of the tools in this crate.
+//!
 use crate::types::{Filesystems, MountList, ZfsMounts};
 use crate::zfs_info::dataset_root;
 use std::collections::HashSet;

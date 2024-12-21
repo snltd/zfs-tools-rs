@@ -1,20 +1,21 @@
+use anyhow::anyhow;
 use clap::Parser;
 use common::types::Opts;
 use common::zfs_file;
+use common::zfs_info::dataset_root;
 use filetime::{set_file_times, FileTime};
 use glob::glob;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::{metadata, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use time::{format_description::well_known::Rfc2822, Duration, OffsetDateTime};
 
-type MTimeMap = HashMap<PathBuf, SystemTime>;
+type MTimeMap = BTreeMap<PathBuf, SystemTime>;
 
 #[derive(Parser)]
 #[clap(version, about = "Aligns file timestamps with those in a given snapshot", long_about = None)]
-
 struct Cli {
     /// use specified snapshot name, rather than yesterday's
     #[clap(short, long)]
@@ -26,26 +27,35 @@ struct Cli {
     #[clap(short, long)]
     verbose: bool,
     /// directory name
-    #[clap()]
+    #[arg(required = true)]
     object: Vec<String>,
 }
 
-fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> io::Result<()> {
-    let snapshot_dir = match zfs_file::snapshot_dir_from_file(dir) {
+fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Result<()> {
+    let snapshot_top_level = match zfs_file::snapshot_dir_from_file(dir) {
         Some(snapshot_root) => snapshot_root.join(snapshot_name),
         None => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("{} does not appear to be a ZFS filesystem", dir.display()),
+            return Err(anyhow!(
+                "{} does not appear to be a ZFS filesystem",
+                dir.display()
             ))
         }
     };
 
+    if !snapshot_top_level.exists() {
+        return Err(anyhow!("{} has no ZFS snapshot directory", dir.display()));
+    }
+
+    let dataset_root = dataset_root(dir)?;
+
+    let relative_path = dir
+        .to_string_lossy()
+        .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
+
+    let snapshot_dir = snapshot_top_level.join(relative_path);
+
     if !snapshot_dir.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("{} has no ZFS snapshot directory", dir.display()),
-        ));
+        return Err(anyhow!("No source directory: {}", snapshot_dir.display()));
     }
 
     let live_timestamps = timestamps_for(dir, opts);
@@ -55,7 +65,7 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> io::Result<(
 
     for (file, ts) in snapshot_timestamps {
         if let Some(live_ts) = live_timestamps.get(&file) {
-            let target_file = dir.join(file);
+            let target_file = dir.join(&file);
             if &ts != live_ts {
                 if opts.noop || opts.verbose {
                     println!("{} -> {}", target_file.display(), format_time(ts));
@@ -64,21 +74,23 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> io::Result<(
                 if !opts.noop && set_timestamp(&target_file, ts).is_err() {
                     errs += 1;
                 }
+            } else if opts.verbose {
+                println!("{} : correct", file.display());
             }
+        } else if opts.verbose {
+            println!("{} : no source in snapshot", file.display());
         }
     }
 
     if errs == 0 {
         Ok(())
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("Failed to set times in {} files", errs),
-        ))
+        Err(anyhow!("Failed to set times in {} files", errs))
     }
 }
 
 fn set_timestamp(file: &Path, ts: SystemTime) -> io::Result<()> {
+    println!("setting {}", file.display());
     let mtime = FileTime::from_system_time(ts);
     File::open(file)?;
     set_file_times(file, mtime, mtime)
@@ -94,20 +106,17 @@ fn timestamps_for(dir: &Path, opts: &Opts) -> MTimeMap {
         println!("Collecting timestamps for {}", dir.display());
     }
 
-    let mut ret = MTimeMap::new();
     let pattern = format!("{}/**/*", dir.to_string_lossy());
-
-    for entry in glob(&pattern).expect("Failed to read glob pattern") {
-        if let Ok(path) = entry {
-            if let Ok(metadata) = metadata(&path) {
-                if let Ok(relative_path) = path.strip_prefix(dir) {
-                    ret.insert(relative_path.to_path_buf(), metadata.modified().unwrap());
-                }
-            }
-        }
-    }
-
-    ret
+    glob(&pattern)
+        .expect("Failed to read glob pattern")
+        .filter_map(Result::ok)
+        .filter_map(|path| {
+            let metadata = metadata(&path).ok()?;
+            let relative_path = path.strip_prefix(dir).ok()?;
+            let modified_time = metadata.modified().ok()?;
+            Some((relative_path.to_path_buf(), modified_time))
+        })
+        .collect()
 }
 
 fn default_snapname(ts: OffsetDateTime) -> String {
