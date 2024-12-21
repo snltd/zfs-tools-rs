@@ -47,12 +47,22 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
     }
 
     let dataset_root = dataset_root(dir)?;
+    let snapshot_dir: PathBuf;
 
-    let relative_path = dir
-        .to_string_lossy()
-        .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
+    if dir == dataset_root {
+        snapshot_dir = snapshot_top_level;
+    } else {
+        let relative_path = dir
+            .to_string_lossy()
+            .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
 
-    let snapshot_dir = snapshot_top_level.join(relative_path);
+        snapshot_dir = snapshot_top_level.join(&relative_path);
+        println!("relative_path is {:?}", &relative_path);
+    }
+
+    // println!("snapshot_top_level is {:?}", snapshot_top_level);
+    // println!("dataset_root is {:?}", dataset_root);
+    // println!("dir is {:?}", dir);
 
     if !snapshot_dir.exists() {
         return Err(anyhow!("No source directory: {}", snapshot_dir.display()));
@@ -60,6 +70,12 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
 
     let live_timestamps = timestamps_for(dir, opts);
     let snapshot_timestamps = timestamps_for(&snapshot_dir, opts);
+
+    println!(
+        "{} in live and {} in snapshot",
+        live_timestamps.len(),
+        snapshot_timestamps.len()
+    );
 
     let mut errs = 0;
 
