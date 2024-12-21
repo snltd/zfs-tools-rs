@@ -57,12 +57,7 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
             .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
 
         snapshot_dir = snapshot_top_level.join(&relative_path);
-        println!("relative_path is {:?}", &relative_path);
     }
-
-    // println!("snapshot_top_level is {:?}", snapshot_top_level);
-    // println!("dataset_root is {:?}", dataset_root);
-    // println!("dir is {:?}", dir);
 
     if !snapshot_dir.exists() {
         return Err(anyhow!("No source directory: {}", snapshot_dir.display()));
@@ -70,13 +65,6 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
 
     let live_timestamps = timestamps_for(dir, opts);
     let snapshot_timestamps = timestamps_for(&snapshot_dir, opts);
-
-    println!(
-        "{} in live and {} in snapshot",
-        live_timestamps.len(),
-        snapshot_timestamps.len()
-    );
-
     let mut errs = 0;
 
     for (file, ts) in snapshot_timestamps {
@@ -106,7 +94,6 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
 }
 
 fn set_timestamp(file: &Path, ts: SystemTime) -> io::Result<()> {
-    println!("setting {}", file.display());
     let mtime = FileTime::from_system_time(ts);
     File::open(file)?;
     set_file_times(file, mtime, mtime)
