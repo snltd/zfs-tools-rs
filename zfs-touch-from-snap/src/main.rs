@@ -47,17 +47,16 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
     }
 
     let dataset_root = dataset_root(dir)?;
-    let snapshot_dir: PathBuf;
 
-    if dir == dataset_root {
-        snapshot_dir = snapshot_top_level;
+    let snapshot_dir = if dir == dataset_root {
+        snapshot_top_level
     } else {
         let relative_path = dir
             .to_string_lossy()
             .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
 
-        snapshot_dir = snapshot_top_level.join(&relative_path);
-    }
+        snapshot_top_level.join(&relative_path)
+    };
 
     if !snapshot_dir.exists() {
         return Err(anyhow!("No source directory: {}", snapshot_dir.display()));

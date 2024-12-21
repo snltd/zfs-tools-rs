@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-real-usage"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "byte-unit",
  "common",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-remove-snaps"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-rogue-snaps"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "common",
  "regex",
@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-snap"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "clap",
  "common",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-touch-from-snap"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "clap",
