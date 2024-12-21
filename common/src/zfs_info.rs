@@ -1,16 +1,16 @@
 use crate::command_helpers::output_as_lines;
 use crate::constants::ZFS;
 use crate::types::{Filesystems, MountList};
+use anyhow::anyhow;
 use std::collections::HashSet;
-use std::error::Error;
+use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{fs, io};
 
 /// Returns a Vec of all the snapshots zfs can see, each being a string.
 ///
-pub fn all_snapshots() -> Result<Vec<String>, Box<dyn Error>> {
+pub fn all_snapshots() -> anyhow::Result<Vec<String>> {
     let mut cmd = Command::new(ZFS);
     cmd.arg("list")
         .arg("-Ho")
@@ -23,7 +23,7 @@ pub fn all_snapshots() -> Result<Vec<String>, Box<dyn Error>> {
 
 /// Returns a Vec of all the ZFS filesystems on the host, each being a string.
 ///
-pub fn all_filesystems() -> Result<Vec<String>, Box<dyn Error>> {
+pub fn all_filesystems() -> anyhow::Result<Vec<String>> {
     let mut cmd = Command::new(ZFS);
     cmd.arg("list")
         .arg("-Ho")
@@ -36,7 +36,7 @@ pub fn all_filesystems() -> Result<Vec<String>, Box<dyn Error>> {
 
 /// Returns a Vec of all mounted ZFS filesystems, described as Strings.
 ///
-pub fn all_zfs_mounts() -> Result<Vec<String>, Box<dyn Error>> {
+pub fn all_zfs_mounts() -> anyhow::Result<Vec<String>> {
     let mut cmd = Command::new(ZFS);
     cmd.arg("list").arg("-Ho").arg("mountpoint,name");
     output_as_lines(cmd)
@@ -45,7 +45,7 @@ pub fn all_zfs_mounts() -> Result<Vec<String>, Box<dyn Error>> {
 /// Returns a vec of all the ZFS mounts which are not 'legacy', sorted by the
 /// length of the path
 ///
-pub fn mounted_filesystems(mounts: Vec<String>) -> Result<MountList, Box<dyn Error>> {
+pub fn mounted_filesystems(mounts: Vec<String>) -> anyhow::Result<MountList> {
     let mut ret: Vec<(PathBuf, String)> = mounts
         .iter()
         .filter_map(|line| {
@@ -65,12 +65,12 @@ pub fn mounted_filesystems(mounts: Vec<String>) -> Result<MountList, Box<dyn Err
     Ok(ret)
 }
 
-pub fn get_mounted_filesystems() -> Result<MountList, Box<dyn Error>> {
+pub fn get_mounted_filesystems() -> anyhow::Result<MountList> {
     let all_mounts = all_zfs_mounts()?;
     mounted_filesystems(all_mounts)
 }
 
-pub fn is_mountpoint(file: &Path) -> io::Result<bool> {
+pub fn is_mountpoint(file: &Path) -> anyhow::Result<bool> {
     if file == PathBuf::from("/") {
         Ok(true)
     } else {
@@ -80,16 +80,13 @@ pub fn is_mountpoint(file: &Path) -> io::Result<bool> {
     }
 }
 
-pub fn dataset_root(file: &Path) -> io::Result<PathBuf> {
+pub fn dataset_root(file: &Path) -> anyhow::Result<PathBuf> {
     if is_mountpoint(file)? {
         Ok(file.to_path_buf())
     } else if let Some(parent) = file.parent() {
         dataset_root(parent)
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "failed to find root",
-        ))
+        Err(anyhow!("failed to find root"))
     }
 }
 

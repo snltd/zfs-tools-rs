@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Parser;
 use common::command_helpers::format_command;
 use common::constants::ZFS;
@@ -5,12 +6,10 @@ use common::rules::omit_rules_match;
 use common::types::{ArgList, Opts, SnapshotList, SnapshotResult};
 use common::{zfs_file, zfs_info};
 use regex::Regex;
-use std::io;
 use std::process::{exit, Command};
 
 #[derive(Parser)]
 #[clap(version, about = "Bulk-removes ZFS snapshots", long_about = None)]
-
 struct Cli {
     /// Specifies that args are files: the snapshots containing these files will be destroyed
     #[clap(short, long)]
@@ -42,14 +41,11 @@ struct Cli {
 }
 
 // If any removal fails, fail the whole lot.
-fn remove_snaps(list: SnapshotList, opts: Opts) -> io::Result<()> {
+fn remove_snaps(list: SnapshotList, opts: Opts) -> anyhow::Result<()> {
     for snap in list {
         // Double check that we aren't going to remove a dataset
         if !snap.contains("@") {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("refusing to remove {}", snap),
-            ));
+            return Err(anyhow!("refusing to remove {}", snap));
         }
 
         let mut cmd = Command::new(ZFS);
@@ -158,10 +154,7 @@ fn snapshot_list(cli: &Cli) -> SnapshotResult {
 
     if cli.snaps {
         if cli.recurse {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "-r is not allowed with snapshot arguments",
-            )));
+            return Err(anyhow!("-r is not allowed with snapshot arguments"));
         } else {
             return snapshot_list_from_snap_names(&arg_list);
         }
@@ -169,10 +162,7 @@ fn snapshot_list(cli: &Cli) -> SnapshotResult {
 
     if cli.all {
         if cli.recurse {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "-r is not allowed with dataset name arguments",
-            )));
+            return Err(anyhow!("-r is not allowed with dataset name arguments"));
         } else {
             return snapshot_list_from_dataset_names(&arg_list);
         }

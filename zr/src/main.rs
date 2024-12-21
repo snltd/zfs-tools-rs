@@ -13,7 +13,6 @@ use std::{fs, io};
 
 #[derive(Parser)]
 #[clap(version, about = "Restores files from ZFS snapshots")]
-
 struct Cli {
     /// Print what would happen, without doing it
     #[clap(short, long)]
@@ -45,7 +44,7 @@ fn all_snapshot_dirs(dataset_root: &Path) -> Option<Vec<PathBuf>> {
     }
 }
 
-fn restore_action(file: &Path, cli: &Cli) -> io::Result<CopyAction> {
+fn restore_action(file: &Path, cli: &Cli) -> anyhow::Result<CopyAction> {
     // file may well not exist, so let's assume user error if its PARENT isn't there
     let parent = file.parent().unwrap();
     let target_dir = parent.canonicalize()?;

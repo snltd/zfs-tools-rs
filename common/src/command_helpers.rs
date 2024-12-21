@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::process::Command;
 
 /// Returns a printable string of the given command
@@ -17,7 +16,7 @@ pub fn format_command(cmd: &Command) -> String {
 /// Takes a Command output and returns it as a Vec of strings. Empty lines
 /// are omitted.
 ///
-pub fn output_as_lines(mut cmd: Command) -> Result<Vec<String>, Box<dyn Error>> {
+pub fn output_as_lines(mut cmd: Command) -> anyhow::Result<Vec<String>> {
     let raw_output = cmd.output()?;
     let string_output = String::from_utf8(raw_output.stdout)?;
     let lines: Vec<String> = string_output.lines().map(String::from).collect();
