@@ -1,9 +1,8 @@
-use std::error::Error;
 use std::path::PathBuf;
 
 pub type ArgList = Vec<String>;
 pub type SnapshotList = Vec<String>;
-pub type SnapshotResult = Result<SnapshotList, Box<dyn Error>>;
+pub type SnapshotResult = anyhow::Result<SnapshotList>;
 pub type MountList = Vec<(PathBuf, String)>;
 pub type Filesystems = Vec<String>;
 pub type ZfsMounts = Vec<(PathBuf, String)>;

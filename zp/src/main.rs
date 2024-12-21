@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[clap(version, about = "Promotes files from ZFS snapshots")]
-
 struct Cli {
     /// Print what would happen, without doing it
     #[clap(short, long)]

@@ -248,6 +248,7 @@ dependencies = [
 name = "common"
 version = "2.0.0"
 dependencies = [
+ "anyhow",
  "tempfile",
 ]
 
@@ -1060,6 +1061,7 @@ dependencies = [
 name = "zfs-remove-snaps"
 version = "2.0.0"
 dependencies = [
+ "anyhow",
  "clap",
  "common",
  "regex",
@@ -1084,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "zfs-touch-from-snap"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1106,6 +1108,7 @@ dependencies = [
 name = "zr"
 version = "2.0.0"
 dependencies = [
+ "anyhow",
  "clap",
  "colored",
  "common",

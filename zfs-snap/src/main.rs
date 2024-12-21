@@ -9,7 +9,6 @@ use time::{format_description, OffsetDateTime};
 
 #[derive(Parser)]
 #[clap(version, about = "Takes automatically named ZFS snapshots", long_about= None)]
-
 struct Cli {
     #[clap(
         short = 't',
