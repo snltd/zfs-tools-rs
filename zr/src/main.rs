@@ -49,7 +49,7 @@ fn restore_action(file: &Path, cli: &Cli) -> anyhow::Result<CopyAction> {
     let parent = file.parent().unwrap();
     let target_dir = parent.canonicalize()?;
     let filesystem_root = zfs_info::dataset_root(&target_dir)?;
-    let mut candidates = candidates(&filesystem_root, file)?;
+    let mut candidates = candidates(&filesystem_root, file, cli)?;
 
     if candidates.is_empty() {
         println!("No matches found.");
@@ -132,7 +132,7 @@ fn backup_target(src: &Path, cli: &Cli) -> io::Result<()> {
     }
 }
 
-fn candidates(filesystem_root: &Path, file: &Path) -> io::Result<Candidates> {
+fn candidates(filesystem_root: &Path, file: &Path, cli: &Cli) -> io::Result<Candidates> {
     let snapshot_dirs = match all_snapshot_dirs(filesystem_root) {
         Some(dirs) => dirs,
         None => {
@@ -141,10 +141,18 @@ fn candidates(filesystem_root: &Path, file: &Path) -> io::Result<Candidates> {
         }
     };
 
+    if cli.verbose {
+        println!("Found {} snapshots.", snapshot_dirs.len());
+    }
+
     let relative_path = match path_relative_to_fs_root(file, filesystem_root) {
         Some(path) => path,
         None => {
-            eprintln!("Failed to calculate relative path for {}", file.display());
+            eprintln!(
+                "Failed to calculate path for {} relative to {}",
+                file.display(),
+                filesystem_root.display()
+            );
             return Ok(Vec::new());
         }
     };
@@ -153,7 +161,13 @@ fn candidates(filesystem_root: &Path, file: &Path) -> io::Result<Candidates> {
         .iter()
         .filter_map(|snapdir| {
             let candidate = snapdir.join(&relative_path);
+            if cli.verbose {
+                print!("{}: ", candidate.display());
+            }
             if candidate.exists() {
+                if cli.verbose {
+                    println!("found candidate file");
+                }
                 match details_of(snapdir, &candidate) {
                     Ok(candidate) => Some(candidate),
                     Err(e) => {
@@ -162,6 +176,9 @@ fn candidates(filesystem_root: &Path, file: &Path) -> io::Result<Candidates> {
                     }
                 }
             } else {
+                if cli.verbose {
+                    println!("no candidate file");
+                }
                 None
             }
         })
@@ -207,10 +224,10 @@ fn path_relative_to_fs_root(file: &Path, filesystem_root: &Path) -> Option<PathB
 // We need to canonicalize the source file, whether it exists or not.
 fn canonical_file(file: PathBuf) -> io::Result<PathBuf> {
     if file.is_absolute() {
-        return Ok(file);
+        return file.canonicalize();
     }
 
-    let pwd = std::env::current_dir()?;
+    let pwd = std::env::current_dir()?.canonicalize()?;
 
     Ok(pwd.join(file))
 }
@@ -287,12 +304,20 @@ mod test {
 
     #[test]
     fn test_candidates() {
+        let cli = Cli {
+            file_list: vec!["irrelevant_for_test".into()],
+            verbose: false,
+            noop: false,
+            auto: true,
+            noclobber: false,
+        };
+
         let mut expected = vec![
             fixture(".zfs/snapshot/monday/file_in_both"),
             fixture(".zfs/snapshot/tuesday/file_in_both"),
         ];
 
-        let mut actual = candidates(&fixture(""), &fixture("file_in_both"))
+        let mut actual = candidates(&fixture(""), &fixture("file_in_both"), &cli)
             .unwrap()
             .into_iter()
             .map(|c| c.path)
@@ -304,14 +329,14 @@ mod test {
 
         assert_eq!(
             vec![fixture(".zfs/snapshot/monday/file_in_monday"),],
-            candidates(&fixture(""), &fixture("file_in_monday"))
+            candidates(&fixture(""), &fixture("file_in_monday"), &cli)
                 .unwrap()
                 .into_iter()
                 .map(|c| c.path)
                 .collect::<Vec<PathBuf>>()
         );
 
-        assert!(candidates(&fixture(""), &fixture("file_in_neither"))
+        assert!(candidates(&fixture(""), &fixture("file_in_neither"), &cli)
             .unwrap()
             .is_empty());
     }
