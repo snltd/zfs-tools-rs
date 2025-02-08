@@ -43,7 +43,10 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
     };
 
     if !snapshot_top_level.exists() {
-        return Err(anyhow!("{} has no ZFS snapshot directory", dir.display()));
+        return Err(anyhow!(
+            "No readable ZFS snapshot directory. (Expected '{}')",
+            snapshot_top_level.display()
+        ));
     }
 
     let dataset_root = dataset_root(dir)?;
@@ -143,13 +146,22 @@ fn main() {
     };
 
     for f in cli.object {
-        let f = PathBuf::from(f);
-        if !f.is_dir() {
-            println!("WARNING: {} is not a valid directory", f.display());
+        let path = PathBuf::from(f);
+
+        let full_path = match path.canonicalize() {
+            Ok(f) => f,
+            Err(_) => {
+                eprintln!("ERROR: cannot cannonicalize {}", path.display());
+                std::process::exit(1);
+            }
+        };
+
+        if !full_path.is_dir() {
+            eprintln!("WARNING: {} is not a valid directory", full_path.display());
             continue;
         }
 
-        if let Err(e) = touch_directory(&f, &snapname, &opts) {
+        if let Err(e) = touch_directory(&full_path, &snapname, &opts) {
             eprintln!("ERROR: {}", e);
             std::process::exit(1)
         }
