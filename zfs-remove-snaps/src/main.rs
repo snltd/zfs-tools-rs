@@ -36,7 +36,7 @@ struct Cli {
     #[clap(short, long)]
     recurse: bool,
     /// Dataset, snapshot, or directory name
-    #[clap()]
+    #[clap(required = true, num_args = 1..)]
     object: Vec<String>,
 }
 
