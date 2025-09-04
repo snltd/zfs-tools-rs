@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use clap::Parser;
 use common::types::Opts;
+use common::verbose;
 use common::zfs_file;
 use common::zfs_info::dataset_root;
 use filetime::{set_file_times, FileTime};
@@ -17,7 +18,7 @@ type MTimeMap = BTreeMap<PathBuf, SystemTime>;
 #[derive(Parser)]
 #[clap(version, about = "Aligns file timestamps with those in a given snapshot", long_about = None)]
 struct Cli {
-    /// use specified snapshot name, rather than yesterday's
+    /// Use specified snapshot name, rather than yesterday's
     #[clap(short, long)]
     snapname: Option<String>,
     /// Print what would happen, without doing it
@@ -26,12 +27,13 @@ struct Cli {
     /// Be verbose
     #[clap(short, long)]
     verbose: bool,
-    /// directory name
+    /// One or more directories
     #[arg(required = true)]
-    object: Vec<String>,
+    dirs: Vec<String>,
 }
 
 fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Result<()> {
+    verbose!(opts, "Touching directory {}", dir.display());
     let snapshot_top_level = match zfs_file::snapshot_dir_from_file(dir) {
         Some(snapshot_root) => snapshot_root.join(snapshot_name),
         None => {
@@ -73,18 +75,16 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
         if let Some(live_ts) = live_timestamps.get(&file) {
             let target_file = dir.join(&file);
             if &ts != live_ts {
-                if opts.noop || opts.verbose {
-                    println!("{} -> {}", target_file.display(), format_time(ts));
-                }
+                verbose!(opts, "{} -> {}", target_file.display(), format_time(ts));
 
                 if !opts.noop && set_timestamp(&target_file, ts).is_err() {
                     errs += 1;
                 }
-            } else if opts.verbose {
-                println!("{} : correct", file.display());
+            } else {
+                verbose!(opts, "{} : correct", file.display());
             }
-        } else if opts.verbose {
-            println!("{} : no source in snapshot", file.display());
+        } else {
+            verbose!(opts, "{} : no source in snapshot", file.display());
         }
     }
 
@@ -107,9 +107,7 @@ fn format_time(time: SystemTime) -> String {
 }
 
 fn timestamps_for(dir: &Path, opts: &Opts) -> MTimeMap {
-    if opts.verbose {
-        println!("Collecting timestamps for {}", dir.display());
-    }
+    verbose!(opts, "Collecting timestamps for {}", dir.display());
 
     let pattern = format!("{}/**/*", dir.to_string_lossy());
     glob(&pattern)
@@ -145,7 +143,7 @@ fn main() {
         }
     };
 
-    for f in cli.object {
+    for f in cli.dirs {
         let path = PathBuf::from(f);
 
         let full_path = match path.canonicalize() {
