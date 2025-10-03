@@ -84,13 +84,13 @@ fn format_timestamp(timestamp: i64) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::PathBuf;
+    use camino::Utf8PathBuf;
 
     #[test]
     fn test_basic_line() {
         let candidate = Candidate {
             snapname: "may".to_string(),
-            path: PathBuf::from("some/path"),
+            path: Utf8PathBuf::from("some/path"),
             mtime: 1730563919,
             size: 150679,
         };

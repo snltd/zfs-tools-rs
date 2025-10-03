@@ -80,12 +80,12 @@ fn main() {
         Ok(output) => match parse_list_output(output) {
             Ok(parsed_list) => display_list(parsed_list),
             Err(e) => {
-                eprintln!("ERROR: failed to parse dataset list: {}", e);
+                eprintln!("ERROR: failed to parse dataset list: {e}");
                 exit(2);
             }
         },
         Err(e) => {
-            eprintln!("ERROR: failed to list datasets: {}", e);
+            eprintln!("ERROR: failed to list datasets: {e}");
             exit(1);
         }
     }

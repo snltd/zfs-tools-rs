@@ -1,10 +1,10 @@
 [package]
 name = "zfs-remove-snaps"
-version = "2.0.1"
-edition = "2021"
+version = "2.1.0"
+edition = "2024"
 
 [dependencies]
-clap = { version = "4.3", features = ["derive"] }
-regex = "1"
-common = { path = "../common" }
 anyhow = "1.0.94"
+clap = { version = "4.3", features = ["derive"] }
+common = { path = "../common" }
+regex = "1"
