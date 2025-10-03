@@ -1,9 +1,10 @@
 [package]
 name = "zfs-snap"
-version = "2.0.1"
-edition = "2021"
+version = "2.1.0"
+edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
 clap = { version = "4.3", features = ["derive"] }
 common = { path = "../common" }
 time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }

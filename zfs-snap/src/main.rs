@@ -1,11 +1,11 @@
+use anyhow::ensure;
 use clap::Parser;
 use common::command_helpers::format_command;
 use common::constants::ZFS;
 use common::types::{Filesystems, Opts};
 use common::{rules, zfs_file, zfs_info};
-use std::io;
-use std::process::{exit, Command};
-use time::{format_description, OffsetDateTime};
+use std::process::{Command, exit};
+use time::{OffsetDateTime, format_description};
 
 #[derive(Parser)]
 #[clap(version, about = "Takes automatically named ZFS snapshots", long_about= None)]
@@ -45,7 +45,7 @@ fn dataset_list(from_user: Option<Vec<String>>, all_filesystems: Filesystems) ->
     }
 }
 
-fn snapname(snap_type: &str, timestamp: OffsetDateTime) -> Result<String, String> {
+fn snapname(snap_type: &str, timestamp: OffsetDateTime) -> anyhow::Result<String, String> {
     match snap_type {
         "date" => Ok(timestamp.date().to_string()),
         "day" => Ok(timestamp.weekday().to_string().to_lowercase()),
@@ -56,7 +56,7 @@ fn snapname(snap_type: &str, timestamp: OffsetDateTime) -> Result<String, String
     }
 }
 
-fn format_time(timestamp: OffsetDateTime, format_str: &str) -> Result<String, String> {
+fn format_time(timestamp: OffsetDateTime, format_str: &str) -> anyhow::Result<String, String> {
     let format = format_description::parse(format_str)
         .map_err(|_| "Invalid format description".to_string())?;
     timestamp
@@ -108,7 +108,11 @@ fn snapshot_command(snapshot: &str, action: &str, opts: &Opts, hush: bool) -> bo
     }
 }
 
-fn do_the_snapshotting(dataset_list: Filesystems, snapname: String, opts: Opts) -> io::Result<()> {
+fn do_the_snapshotting(
+    dataset_list: Filesystems,
+    snapname: String,
+    opts: Opts,
+) -> anyhow::Result<()> {
     let mut errs = 0;
 
     for dataset in dataset_list {
@@ -128,14 +132,8 @@ fn do_the_snapshotting(dataset_list: Filesystems, snapname: String, opts: Opts) 
         }
     }
 
-    if errs > 0 {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("ERROR: {} snapshots were not created", errs),
-        ))
-    } else {
-        Ok(())
-    }
+    ensure!(errs == 0, "ERROR: {errs} snapshots were not created");
+    Ok(())
 }
 
 fn main() {

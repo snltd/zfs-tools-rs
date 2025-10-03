@@ -2,8 +2,18 @@
 
 [![Test](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml/badge.svg)](https://github.com/snltd/zfs-tools-rs/actions/workflows/test.yml)
 
-Rust rewrites of some shell and Ruby scripts I've been using for years. Some of
-what they do is now replicated in illumos.
+Rust rewrites of some shell and Ruby scripts I've been using for years.
+
+## Install
+
+Assuming you have [Rust installed](https://rustup.rs/), clone the repo and run
+
+```
+$ ./install.sh
+```
+
+to install all the binaries in your Cargo bin/ directory. Alternatively, use
+`cargo install --path=<dir>` to install whichever ones you want.
 
 ## zfs-real-usage
 
@@ -59,7 +69,7 @@ you use...
 
 ## zfs-snap
 
-This program takes ZFS snapshots with an automated naming scheme.
+This program creates ZFS snapshots according to an automated naming scheme.
 
 - `-t` (`--type`) specifies the format of the snapshot name, Choose from `day`,
   which uses the day of the week, lowercased; `month`; `date`, which is

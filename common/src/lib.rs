@@ -1,6 +1,7 @@
 pub mod command_helpers;
 pub mod constants;
 pub mod file_copier;
+pub mod macros;
 pub mod rules;
 pub mod spec_helper;
 pub mod types;

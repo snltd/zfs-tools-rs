@@ -1,6 +1,8 @@
-use anyhow::anyhow;
+use anyhow::{bail, ensure};
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use common::types::Opts;
+use common::verbose;
 use common::zfs_file;
 use common::zfs_info::dataset_root;
 use filetime::{set_file_times, FileTime};
@@ -8,16 +10,15 @@ use glob::glob;
 use std::collections::BTreeMap;
 use std::fs::{metadata, File};
 use std::io;
-use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use time::{format_description::well_known::Rfc2822, Duration, OffsetDateTime};
 
-type MTimeMap = BTreeMap<PathBuf, SystemTime>;
+type MTimeMap = BTreeMap<Utf8PathBuf, SystemTime>;
 
 #[derive(Parser)]
 #[clap(version, about = "Aligns file timestamps with those in a given snapshot", long_about = None)]
 struct Cli {
-    /// use specified snapshot name, rather than yesterday's
+    /// Use specified snapshot name, rather than yesterday's
     #[clap(short, long)]
     snapname: Option<String>,
     /// Print what would happen, without doing it
@@ -26,44 +27,39 @@ struct Cli {
     /// Be verbose
     #[clap(short, long)]
     verbose: bool,
-    /// directory name
+    /// One or more directories
     #[arg(required = true)]
-    object: Vec<String>,
+    dirs: Vec<String>,
 }
 
-fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Result<()> {
+fn touch_directory(dir: &Utf8Path, snapshot_name: &str, opts: &Opts) -> anyhow::Result<()> {
+    verbose!(opts, "Touching directory {}", dir);
+
     let snapshot_top_level = match zfs_file::snapshot_dir_from_file(dir) {
         Some(snapshot_root) => snapshot_root.join(snapshot_name),
-        None => {
-            return Err(anyhow!(
-                "{} does not appear to be a ZFS filesystem",
-                dir.display()
-            ))
-        }
+        None => bail!("{} does not appear to be a ZFS filesystem", dir),
     };
 
-    if !snapshot_top_level.exists() {
-        return Err(anyhow!(
-            "No readable ZFS snapshot directory. (Expected '{}')",
-            snapshot_top_level.display()
-        ));
-    }
+    ensure!(
+        snapshot_top_level.exists(),
+        "No readable ZFS snapshot directory. (Expected '{}')",
+        snapshot_top_level
+    );
 
     let dataset_root = dataset_root(dir)?;
 
     let snapshot_dir = if dir == dataset_root {
         snapshot_top_level
     } else {
-        let relative_path = dir
-            .to_string_lossy()
-            .replace(&format!("{}/", dataset_root.to_string_lossy()), "");
-
+        let relative_path = dir.to_string().replace(&format!("{dataset_root}/"), "");
         snapshot_top_level.join(&relative_path)
     };
 
-    if !snapshot_dir.exists() {
-        return Err(anyhow!("No source directory: {}", snapshot_dir.display()));
-    }
+    ensure!(
+        snapshot_dir.exists(),
+        "No source directory: {}",
+        snapshot_dir
+    );
 
     let live_timestamps = timestamps_for(dir, opts);
     let snapshot_timestamps = timestamps_for(&snapshot_dir, opts);
@@ -73,29 +69,25 @@ fn touch_directory(dir: &Path, snapshot_name: &str, opts: &Opts) -> anyhow::Resu
         if let Some(live_ts) = live_timestamps.get(&file) {
             let target_file = dir.join(&file);
             if &ts != live_ts {
-                if opts.noop || opts.verbose {
-                    println!("{} -> {}", target_file.display(), format_time(ts));
-                }
+                verbose!(opts, "{target_file} -> {}", format_time(ts));
 
                 if !opts.noop && set_timestamp(&target_file, ts).is_err() {
                     errs += 1;
                 }
-            } else if opts.verbose {
-                println!("{} : correct", file.display());
+            } else {
+                verbose!(opts, "{file} : correct");
             }
-        } else if opts.verbose {
-            println!("{} : no source in snapshot", file.display());
+        } else {
+            verbose!(opts, "{file} : no source in snapshot");
         }
     }
 
-    if errs == 0 {
-        Ok(())
-    } else {
-        Err(anyhow!("Failed to set times in {} files", errs))
-    }
+    ensure!(errs == 0, "Failed to set times in {} files", errs);
+
+    Ok(())
 }
 
-fn set_timestamp(file: &Path, ts: SystemTime) -> io::Result<()> {
+fn set_timestamp(file: &Utf8Path, ts: SystemTime) -> io::Result<()> {
     let mtime = FileTime::from_system_time(ts);
     File::open(file)?;
     set_file_times(file, mtime, mtime)
@@ -106,12 +98,11 @@ fn format_time(time: SystemTime) -> String {
     datetime.format(&Rfc2822).unwrap()
 }
 
-fn timestamps_for(dir: &Path, opts: &Opts) -> MTimeMap {
-    if opts.verbose {
-        println!("Collecting timestamps for {}", dir.display());
-    }
+fn timestamps_for(dir: &Utf8Path, opts: &Opts) -> MTimeMap {
+    verbose!(opts, "Collecting timestamps for {}", dir);
 
-    let pattern = format!("{}/**/*", dir.to_string_lossy());
+    let pattern = format!("{}/**/*", dir);
+
     glob(&pattern)
         .expect("Failed to read glob pattern")
         .filter_map(Result::ok)
@@ -119,7 +110,8 @@ fn timestamps_for(dir: &Path, opts: &Opts) -> MTimeMap {
             let metadata = metadata(&path).ok()?;
             let relative_path = path.strip_prefix(dir).ok()?;
             let modified_time = metadata.modified().ok()?;
-            Some((relative_path.to_path_buf(), modified_time))
+            let utf8_path = Utf8PathBuf::from_path_buf(relative_path.to_path_buf()).ok()?;
+            Some((utf8_path, modified_time))
         })
         .collect()
 }
@@ -145,24 +137,24 @@ fn main() {
         }
     };
 
-    for f in cli.object {
-        let path = PathBuf::from(f);
+    for f in cli.dirs {
+        let path = Utf8PathBuf::from(f);
 
-        let full_path = match path.canonicalize() {
+        let full_path = match path.canonicalize_utf8() {
             Ok(f) => f,
             Err(_) => {
-                eprintln!("ERROR: cannot cannonicalize {}", path.display());
+                eprintln!("ERROR: cannot cannonicalize {path}");
                 std::process::exit(1);
             }
         };
 
         if !full_path.is_dir() {
-            eprintln!("WARNING: {} is not a valid directory", full_path.display());
+            eprintln!("WARNING: {full_path} is not a valid directory");
             continue;
         }
 
         if let Err(e) = touch_directory(&full_path, &snapname, &opts) {
-            eprintln!("ERROR: {}", e);
+            eprintln!("ERROR: {e}");
             std::process::exit(1)
         }
     }
@@ -180,18 +172,18 @@ mod test {
             noop: false,
         };
 
-        let result = timestamps_for(&PathBuf::from("test/resources"), &opts);
-        let mut actual_files: Vec<PathBuf> = result.keys().cloned().collect();
+        let result = timestamps_for(&Utf8PathBuf::from("test/resources"), &opts);
+        let mut actual_files: Vec<Utf8PathBuf> = result.keys().cloned().collect();
 
         let mut expected_files = vec![
-            PathBuf::from("dir1"),
-            PathBuf::from("dir1/file3"),
-            PathBuf::from("dir2"),
-            PathBuf::from("dir2/dir3"),
-            PathBuf::from("dir2/dir3/file5"),
-            PathBuf::from("dir2/file4"),
-            PathBuf::from("file1"),
-            PathBuf::from("file2"),
+            Utf8PathBuf::from("dir1"),
+            Utf8PathBuf::from("dir1/file3"),
+            Utf8PathBuf::from("dir2"),
+            Utf8PathBuf::from("dir2/dir3"),
+            Utf8PathBuf::from("dir2/dir3/file5"),
+            Utf8PathBuf::from("dir2/file4"),
+            Utf8PathBuf::from("file1"),
+            Utf8PathBuf::from("file2"),
         ];
 
         expected_files.sort();
