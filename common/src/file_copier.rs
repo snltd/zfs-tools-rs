@@ -1,11 +1,11 @@
 use crate::types::ZpZrOpts;
+use camino::Utf8Path;
 use std::fs;
 use std::io;
-use std::path::Path;
 
 /// Recursively copies directory trees. Is able to merge with existing targets if opts.noclobber
 /// is set.
-pub fn copy_file(src: &Path, dest: &Path, opts: &ZpZrOpts) -> io::Result<u64> {
+pub fn copy_file(src: &Utf8Path, dest: &Utf8Path, opts: &ZpZrOpts) -> io::Result<u64> {
     if src.is_file() {
         copy_file_action(src, dest, opts)
     } else {
@@ -13,15 +13,15 @@ pub fn copy_file(src: &Path, dest: &Path, opts: &ZpZrOpts) -> io::Result<u64> {
             fs::create_dir_all(dest)?;
         }
 
-        for f in fs::read_dir(src)? {
+        for f in src.read_dir_utf8()? {
             let f = f?;
             let src_path = f.path();
             let dest_path = dest.join(f.file_name());
 
             if src.is_file() {
-                copy_file_action(&src_path, &dest_path, opts)?;
+                copy_file_action(src_path, &dest_path, opts)?;
             } else {
-                copy_file(&src_path, &dest_path, opts)?;
+                copy_file(src_path, &dest_path, opts)?;
             }
         }
 
@@ -29,15 +29,15 @@ pub fn copy_file(src: &Path, dest: &Path, opts: &ZpZrOpts) -> io::Result<u64> {
     }
 }
 
-fn copy_file_action(src: &Path, dest: &Path, opts: &ZpZrOpts) -> io::Result<u64> {
+fn copy_file_action(src: &Utf8Path, dest: &Utf8Path, opts: &ZpZrOpts) -> io::Result<u64> {
     if dest.exists() && opts.noclobber {
         if opts.verbose {
-            println!("{} exists and noclobber is set", dest.display());
+            println!("{dest} exists and noclobber is set");
         }
         Ok(0)
     } else {
         if opts.verbose || opts.noop {
-            println!("{} -> {}", src.display(), dest.display());
+            println!("{src} -> {dest}");
         }
 
         if opts.noop || (src.is_dir() && dest.exists()) {
@@ -51,8 +51,8 @@ fn copy_file_action(src: &Path, dest: &Path, opts: &ZpZrOpts) -> io::Result<u64>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino_tempfile::tempdir;
     use std::fs;
-    use tempfile::tempdir;
 
     #[test]
     fn test_copy_file_with_noclobber() {

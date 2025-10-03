@@ -2,10 +2,10 @@ use crate::command_helpers::output_as_lines;
 use crate::constants::ZFS;
 use crate::types::{Filesystems, MountList};
 use anyhow::anyhow;
+use camino::{Utf8Path, Utf8PathBuf};
 use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Returns a Vec of all the snapshots zfs can see, each being a string.
@@ -46,7 +46,7 @@ pub fn all_zfs_mounts() -> anyhow::Result<Vec<String>> {
 /// length of the path
 ///
 pub fn mounted_filesystems(mounts: Vec<String>) -> anyhow::Result<MountList> {
-    let mut ret: Vec<(PathBuf, String)> = mounts
+    let mut ret: Vec<(Utf8PathBuf, String)> = mounts
         .iter()
         .filter_map(|line| {
             let mut parts = line.split_whitespace();
@@ -54,14 +54,14 @@ pub fn mounted_filesystems(mounts: Vec<String>) -> anyhow::Result<MountList> {
                 (Some(mountpoint), Some(name))
                     if mountpoint != "none" && mountpoint != "legacy" =>
                 {
-                    Some((PathBuf::from(mountpoint), name.to_string()))
+                    Some((Utf8PathBuf::from(mountpoint), name.to_string()))
                 }
                 _ => None,
             }
         })
         .collect();
 
-    ret.sort_by_key(|(path, _name)| std::cmp::Reverse(path.to_string_lossy().len()));
+    ret.sort_by_key(|(path, _name)| std::cmp::Reverse(path.to_string().len()));
     Ok(ret)
 }
 
@@ -70,8 +70,8 @@ pub fn get_mounted_filesystems() -> anyhow::Result<MountList> {
     mounted_filesystems(all_mounts)
 }
 
-pub fn is_mountpoint(file: &Path) -> anyhow::Result<bool> {
-    if file == PathBuf::from("/") {
+pub fn is_mountpoint(file: &Utf8Path) -> anyhow::Result<bool> {
+    if file == "/" {
         Ok(true)
     } else {
         let path_metadata = fs::metadata(file)?;
@@ -80,7 +80,7 @@ pub fn is_mountpoint(file: &Path) -> anyhow::Result<bool> {
     }
 }
 
-pub fn dataset_root(file: &Path) -> anyhow::Result<PathBuf> {
+pub fn dataset_root(file: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     if is_mountpoint(file)? {
         Ok(file.to_path_buf())
     } else if let Some(parent) = file.parent() {
@@ -122,18 +122,21 @@ mod test {
 
     #[test]
     fn test_zfs_mounts() {
-        let expected: Vec<(PathBuf, String)> = vec![
+        let expected: Vec<(Utf8PathBuf, String)> = vec![
             (
-                PathBuf::from("/zones/serv-build"),
+                Utf8PathBuf::from("/zones/serv-build"),
                 "rpool/zones/serv-build".to_string(),
             ),
             (
-                PathBuf::from("/build/configs"),
+                Utf8PathBuf::from("/build/configs"),
                 "fast/zone/build/config".to_string(),
             ),
-            (PathBuf::from("/build"), "fast/zone/build/build".to_string()),
-            (PathBuf::from("/rpool"), "rpool".to_string()),
-            (PathBuf::from("/zones"), "rpool/zones".to_string()),
+            (
+                Utf8PathBuf::from("/build"),
+                "fast/zone/build/build".to_string(),
+            ),
+            (Utf8PathBuf::from("/rpool"), "rpool".to_string()),
+            (Utf8PathBuf::from("/zones"), "rpool/zones".to_string()),
         ];
 
         assert_eq!(

@@ -3,12 +3,12 @@
 //!
 use crate::types::{Filesystems, MountList, ZfsMounts};
 use crate::zfs_info::dataset_root;
+use camino::{Utf8Path, Utf8PathBuf};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
 /// Given a path and a list of ZFS mounts, works out which, if any, filesystem owns the path.
 ///
-pub fn file_to_dataset(file: &Path, mounts: &MountList) -> Option<String> {
+pub fn file_to_dataset(file: &Utf8Path, mounts: &MountList) -> Option<String> {
     file.ancestors().find_map(|f| {
         mounts.iter().find_map(|(mountpoint, name)| {
             if f.starts_with(mountpoint) {
@@ -23,13 +23,13 @@ pub fn file_to_dataset(file: &Path, mounts: &MountList) -> Option<String> {
 pub fn files_to_datasets(file_list: &[String], zfs_mounts: ZfsMounts) -> Filesystems {
     let filesystems: HashSet<String> = file_list
         .iter()
-        .filter_map(|f| file_to_dataset(&PathBuf::from(f), &zfs_mounts))
+        .filter_map(|f| file_to_dataset(&Utf8PathBuf::from(f), &zfs_mounts))
         .collect();
 
     filesystems.into_iter().collect()
 }
 
-pub fn snapshot_dir_from_file(file: &Path) -> Option<PathBuf> {
+pub fn snapshot_dir_from_file(file: &Utf8Path) -> Option<Utf8PathBuf> {
     match dataset_root(file) {
         Ok(dir) => {
             let snapdir = dir.join(".zfs").join("snapshot");
@@ -53,47 +53,50 @@ mod test {
     #[test]
     fn test_snapshot_dir() {
         assert_eq!(
-            PathBuf::from("/.zfs/snapshot"),
-            snapshot_dir_from_file(&PathBuf::from("/etc/passwd")).unwrap()
+            Utf8PathBuf::from("/.zfs/snapshot"),
+            snapshot_dir_from_file(&Utf8PathBuf::from("/etc/passwd")).unwrap()
         );
 
-        assert_eq!(None, snapshot_dir_from_file(&PathBuf::from("/tmp")));
+        assert_eq!(None, snapshot_dir_from_file(&Utf8PathBuf::from("/tmp")));
 
         assert_eq!(
-            PathBuf::from("/build/.zfs/snapshot"),
-            snapshot_dir_from_file(&PathBuf::from("/build/omnios-extra/build/")).unwrap()
+            Utf8PathBuf::from("/build/.zfs/snapshot"),
+            snapshot_dir_from_file(&Utf8PathBuf::from("/build/omnios-extra/build/")).unwrap()
         );
     }
 
     #[test]
     fn test_file_to_dataset() {
-        let mounts: Vec<(PathBuf, String)> = vec![
+        let mounts: Vec<(Utf8PathBuf, String)> = vec![
             (
-                PathBuf::from("/zones/serv-build"),
+                Utf8PathBuf::from("/zones/serv-build"),
                 "rpool/zones/serv-build".to_string(),
             ),
             (
-                PathBuf::from("/build/configs"),
+                Utf8PathBuf::from("/build/configs"),
                 "fast/zone/build/config".to_string(),
             ),
-            (PathBuf::from("/build"), "fast/zone/build/build".to_string()),
-            (PathBuf::from("/rpool"), "rpool".to_string()),
-            (PathBuf::from("/zones"), "rpool/zones".to_string()),
+            (
+                Utf8PathBuf::from("/build"),
+                "fast/zone/build/build".to_string(),
+            ),
+            (Utf8PathBuf::from("/rpool"), "rpool".to_string()),
+            (Utf8PathBuf::from("/zones"), "rpool/zones".to_string()),
         ];
 
         assert_eq!(
             None,
-            file_to_dataset(&PathBuf::from("/etc/passwd"), &mounts)
+            file_to_dataset(&Utf8PathBuf::from("/etc/passwd"), &mounts)
         );
 
         assert_eq!(
             Some("fast/zone/build/build".to_string()),
-            file_to_dataset(&PathBuf::from("/build/file"), &mounts)
+            file_to_dataset(&Utf8PathBuf::from("/build/file"), &mounts)
         );
 
         assert_eq!(
             Some("fast/zone/build/config".to_string()),
-            file_to_dataset(&PathBuf::from("/build/configs/file"), &mounts)
+            file_to_dataset(&Utf8PathBuf::from("/build/configs/file"), &mounts)
         );
     }
 
@@ -106,12 +109,15 @@ mod test {
         ];
 
         let mount_list = vec![
-            (PathBuf::from("/build"), "fast/zone/build/build".to_string()),
             (
-                PathBuf::from("/build/configs"),
+                Utf8PathBuf::from("/build"),
+                "fast/zone/build/build".to_string(),
+            ),
+            (
+                Utf8PathBuf::from("/build/configs"),
                 "fast/zone/build/config".to_string(),
             ),
-            (PathBuf::from("/rpool"), "rpool".to_string()),
+            (Utf8PathBuf::from("/rpool"), "rpool".to_string()),
         ];
 
         let mut expected = vec!["fast/zone/build/build".to_string(), "rpool".to_string()];
