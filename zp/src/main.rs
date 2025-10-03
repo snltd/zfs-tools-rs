@@ -28,10 +28,9 @@ fn in_snapshot(file: &Utf8Path) -> bool {
     if let Some(zfs_index) = components
         .iter()
         .position(|&c| c == Utf8Component::Normal(".zfs"))
+        && let Some(snapshot_idx) = components.get(zfs_index + 1)
     {
-        if let Some(snapshot_idx) = components.get(zfs_index + 1) {
-            return *snapshot_idx == Utf8Component::Normal("snapshot");
-        }
+        return *snapshot_idx == Utf8Component::Normal("snapshot");
     }
 
     false
@@ -110,12 +109,12 @@ fn main() {
         if !target_dir.exists() {
             verbose!(opts, "Creating {target_dir}");
 
-            if !opts.noop {
-                if let Err(e) = fs::create_dir_all(target_dir) {
-                    eprintln!("Failed to create directory {target_dir}: {e}");
-                    errs += 1;
-                    continue;
-                }
+            if !opts.noop
+                && let Err(e) = fs::create_dir_all(target_dir)
+            {
+                eprintln!("Failed to create directory {target_dir}: {e}");
+                errs += 1;
+                continue;
             }
         }
 

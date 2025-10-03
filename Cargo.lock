@@ -1224,6 +1224,7 @@ dependencies = [
 name = "zfs-snap"
 version = "2.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "common",
  "time",

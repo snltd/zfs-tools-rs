@@ -2,15 +2,14 @@ use common::zfs_info;
 use regex::Regex;
 
 fn filter_fn(snapshot: &String, expected: &[String], regex: &Regex) -> Option<String> {
-    if let Some((fs, snap)) = snapshot.split_once("@") {
-        if !fs.starts_with("rpool/VARSHARE/zones")
-            && !fs.starts_with("rpool/ROOT")
-            && snap != "initial"
-            && !(regex.is_match(snap))
-            && !(expected.iter().any(|x| x == snap))
-        {
-            return Some(snapshot.to_string());
-        }
+    if let Some((fs, snap)) = snapshot.split_once("@")
+        && !fs.starts_with("rpool/VARSHARE/zones")
+        && !fs.starts_with("rpool/ROOT")
+        && snap != "initial"
+        && !(regex.is_match(snap))
+        && !(expected.iter().any(|x| x == snap))
+    {
+        return Some(snapshot.to_string());
     }
     None
 }
